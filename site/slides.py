@@ -32,8 +32,9 @@ st.markdown("""
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
 [data-testid="stToolbar"] { visibility: hidden; }
-/* 保留 sidebar 收合按鈕 */
+/* sidebar */
 [data-testid="collapsedControl"] { visibility: visible !important; }
+section[data-testid="stSidebar"] > div:first-child { min-width: 220px; }
 .block-container {
     padding-top: 1.5rem !important;
     padding-bottom: 6rem !important;
@@ -222,22 +223,36 @@ def nav_bar(s, n):
     icon, title, _ = SLIDES_META[s]
     st.markdown(f"""
 <div class="snav">
-  <span id="snav-left"></span>
-  <span class="snav-pg">{s+1} / {n}　{icon} {title}</span>
-  <span id="snav-right"></span>
+  <span style="flex:1"></span>
+  <span class="snav-pg" style="flex:2;text-align:center">{s+1} / {n}　{icon} {title}</span>
+  <span style="flex:1"></span>
 </div>
 <style>
-/* 讓最後一個 stHorizontalBlock 的按鈕貼近底部導覽視覺 */
 div[data-testid="stHorizontalBlock"]:last-of-type button {{
     height: 48px; font-size: 18px; font-weight: bold;
 }}
+/* 導覽列中的 selectbox：深色背景、白色文字 */
+div[data-testid="stHorizontalBlock"]:last-of-type div[data-baseweb="select"] > div {{
+    background: #1e2130 !important;
+    border-color: #444 !important;
+    color: #ddd !important;
+    font-size: 14px !important;
+}}
 </style>
 """, unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 6, 1])
+    col1, col2, col3 = st.columns([2, 5, 2])
     with col1:
         if s > 0:
             if st.button("← 上一頁", key="nav_prev", use_container_width=True):
                 st.session_state.slide = s - 1; st.rerun()
+    with col2:
+        jump_options = [f"{i+1}. {icon} {t}" for i, (icon, t, _) in enumerate(SLIDES_META)]
+        def _on_jump():
+            sel = st.session_state["nav_jump"]
+            st.session_state.slide = jump_options.index(sel)
+        st.session_state["nav_jump"] = jump_options[s]
+        st.selectbox("跳至", jump_options, key="nav_jump",
+                     label_visibility="collapsed", on_change=_on_jump)
     with col3:
         if s < n - 1:
             if st.button("下一頁 →", key="nav_next", use_container_width=True):
@@ -1153,9 +1168,10 @@ def s21c():  # 推甄 vs 分發
         elif n_dist > 0:
             st.info("你的分數已能分發進不錯的學校，推甄還可挑戰競爭更激烈的科系。")
 
-        tab_dist, tab_rec = st.tabs(
+        tab_dist, tab_rec, tab_evidence = st.tabs(
             ["✅ 分發可上（加權分 ≥ 門檻）",
-             f"🎯 推甄機會（門檻比你高 1–{margin_rec} 分）"])
+             f"🎯 推甄機會（門檻比你高 1–{margin_rec} 分）",
+             "📋 推測依據（學長姐真實紀錄）"])
         with tab_dist:
             df_d = th_sub[th_sub["情境"]=="分發可上 ✅"].sort_values(
                 "錄取總分數", ascending=False)
@@ -1168,6 +1184,51 @@ def s21c():  # 推甄 vs 分發
             st.dataframe(
                 df_r[["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]].head(15),
                 hide_index=True, height=300)
+        with tab_evidence:
+            from data_loader import load_tuijian_stats
+            tj_stats = load_tuijian_stats()
+
+            # 推甄機會名單
+            df_rec_schools = th_sub[th_sub["情境"]=="推甄機會 🎯"][
+                ["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]
+            ].copy()
+
+            # 彙整同一學校的推甄統計（跨科系加總人數，取最低/平均分）
+            tj_year = tj_stats[tj_stats["年度"] == year]
+            school_agg = (
+                tj_year.groupby("學校名稱")
+                .agg(
+                    推甄人數=("推甄人數", "sum"),
+                    推甄最低加權分=("推甄最低加權分", "min"),
+                    推甄平均加權分=("推甄平均加權分", "mean"),
+                )
+                .reset_index()
+            )
+            school_agg["推甄平均加權分"] = school_agg["推甄平均加權分"].round(1)
+            school_agg["推甄最低加權分"] = school_agg["推甄最低加權分"].round(1)
+
+            evidence = df_rec_schools.merge(school_agg, on="學校名稱", how="left")
+            evidence["推甄人數"] = evidence["推甄人數"].fillna(0).astype(int)
+            evidence = evidence.sort_values(
+                ["推甄人數","錄取總分數"], ascending=[False, False])
+
+            n_with = (evidence["推甄人數"] > 0).sum()
+            st.caption(
+                f"{year} 年推甄機會學校中，**{n_with}** 間有本校學長姐推甄錄取紀錄。"
+                "分數為學長姐的**加權統測分**（與門檻同單位），人數 < 2 不顯示分數。")
+            st.dataframe(
+                evidence[["學校名稱","系科組學程名稱","學校類型",
+                           "你的加權分","錄取總分數","分差",
+                           "推甄人數","推甄最低加權分","推甄平均加權分"]].head(20),
+                hide_index=True, height=400,
+                column_config={
+                    "推甄最低加權分": st.column_config.NumberColumn("推甄最低加權分", format="%.1f"),
+                    "推甄平均加權分": st.column_config.NumberColumn("推甄平均加權分", format="%.1f"),
+                    "你的加權分":     st.column_config.NumberColumn("你的加權分",     format="%.1f"),
+                }
+            )
+            st.caption("⚠️ 人數 0 = 本校三屆無紀錄，不代表不可能。"
+                       "加權公式以該校最常見公式估算；推甄仍需備審、面試等條件。")
 
 
 def s22():  # 總結：打破預測
