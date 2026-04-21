@@ -1,0 +1,26 @@
+# 原始資料庫（含個資，不上傳）
+*.mdb
+*.accdb
+*.laccdb
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/
+
+# macOS
+.DS_Store
+
+# 未使用的 CSV（只保留 analytical）
+exports/raw/
+exports/intermediate/
+exports/raw_pdf/
+
+# scripts 不需要上雲
+scripts/
