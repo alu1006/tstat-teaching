@@ -24,3 +24,10 @@ exports/raw_pdf/
 
 # scripts 不需要上雲
 scripts/
+
+# Streamlit secrets（含 service account private key，絕對不可上雲）
+.streamlit/secrets.toml
+site/.streamlit/secrets.toml
+
+# 姓名備份檔（去識別化前的暫存）
+*.namebak

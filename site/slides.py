@@ -19,6 +19,7 @@ from sklearn.linear_model import LinearRegression
 
 sys.path.insert(0, str(Path(__file__).parent))
 from data_loader import load_wide
+import gsheet
 
 st.set_page_config(
     page_title="統測資料課",
@@ -102,15 +103,17 @@ SLIDES_META = [
     ("①", "揭曉：各科平均",      ""),
     ("①", "陷阱題投票",          ""),
     ("①", "直方圖揭曉",          ""),
+    ("①", "薪資真相（小組）",    ""),
+    ("①", "統測例題：中位數",    ""),
     ("②", "第二階段說明",        "phase"),
-    ("②", "正相關 vs 負相關",      ""),
-    ("②", "相關係數 r 怎麼算",    ""),
-    ("②", "分組討論計時",        ""),
+    ("②", "折線 + 長條圖",       ""),
+    ("②", "箱型圖",              ""),
+    ("②", "Q1/Q2/Q3/IQR",       ""),
+    ("②", "EDA 總結",            ""),
     ("③", "第三階段說明",        "phase"),
-    ("③", "折線 + 長條圖",       ""),
-    ("③", "箱型圖",              ""),
-    ("③", "Q1/Q2/Q3/IQR",       ""),
-    ("③", "EDA 總結",            ""),
+    ("③", "正相關 vs 負相關",      ""),
+    ("③", "相關係數 r 怎麼算",    ""),
+    ("③", "分組討論計時",        ""),
     ("④", "第四階段說明",        "phase"),
     ("④", "迴歸直線怎麼算？",   ""),
     ("④", "提問：能預測嗎？",    ""),
@@ -303,47 +306,121 @@ def s0():  # 標題
 </div>""", unsafe_allow_html=True)
 
 
-def s1():  # 第一階段說明
-    st.markdown('<span class="tag phase">第一階段 · 約 25 分鐘</span>', unsafe_allow_html=True)
-    st.markdown('<h1 class="st">數據破冰與直覺挑戰</h1>', unsafe_allow_html=True)
+def s1():  # 第一階段：開場引言
+    st.markdown('<h1 class="st">📣 開場：來看看學長姐的真實戰果</h1>', unsafe_allow_html=True)
     st.markdown("""
-<div class="big"><br>
-🎯 &nbsp;目標：引起動機，打破主觀直覺，建立數據意識<br><br>
-<b>活動 1</b> &nbsp;&nbsp;統測「大魔王」猜謎<br>
-<b>活動 2</b> &nbsp;&nbsp;陷阱題：平均數 vs. 中位數
+<div class="big" style="line-height:2.0">
+<br>
+🎓 &nbsp;<b>115 學年度統測剛結束</b>——再過幾個月就是你們了。<br><br>
+
+但是在你們進考場之前，先看一份「劇透」：<br>
+<span style="color:#ff4b4b;font-weight:bold">112、113、114 三屆學長姐</span>
+留下了完整的模考 + 統測成績資料。<br><br>
+
+📌 &nbsp;我們要一起回答兩個問題：<br>
+　　1. <b>哪一科才是真正的「大魔王」？</b>（你以為的最低，跟實際一樣嗎？）<br>
+　　2. <b>「平均分數」這個數字，到底有多容易騙人？</b>
 </div>""", unsafe_allow_html=True)
 
 
 def s2():  # 原始資料
     st.markdown('<span class="tag">活動 1 · 資訊老師</span>', unsafe_allow_html=True)
     st.markdown('<h2 class="st">這就是「原始資料」</h2>', unsafe_allow_html=True)
-    st.caption(f"共 {len(wide):,} 位學長姐 · {wide.shape[1]} 個欄位 · 每一列就是一個人")
-    st.dataframe(wide.drop(columns=["科別"]), height=540, width="stretch")
+    st.caption(f"共 {len(wide):,} 位學長姐 · 記錄從第一次模擬考到統測的完整成績 · 每一列就是一個人")
+
+    c_link1, c_link2, _ = st.columns([1, 1, 4])
+    c_link1.link_button(
+        "🚀 開啟 Colab 練習",
+        "https://colab.research.google.com/drive/1m2zAE-32IIswHGdXp0K5lzipQXUkYE7w?usp=sharing",
+        use_container_width=True,
+    )
+    c_link2.link_button(
+        "📁 原始資料雲端",
+        "https://drive.google.com/file/d/1_eD1Ozv0Z6F6X0xbGLOyollLb_VQvzD_/view?usp=sharing",  # 01_wide_scores.csv
+        use_container_width=True,
+    )
+
+    st.dataframe(wide.drop(columns=["科別"]), height=480, use_container_width=True)
     st.markdown("""<div class="big" style="margin-top:16px">
 光用眼睛看，你能找出「哪一科的平均分數最低」嗎？
 </div>""", unsafe_allow_html=True)
 
 
-def s3():  # 投票
+def _persist_voter_state():
+    """避免 Streamlit 在切頁時把 widget state 清掉——把 voter_xxx 重新指派給自己。
+    這個 trick 必須在每次 script run 的最頂端跑（不只是有 widget 的頁）。
+    """
+    for k in ("voter_group", "voter_sid", "voter_name"):
+        if k in st.session_state:
+            st.session_state[k] = st.session_state[k]
+
+
+def _voter_inputs(prefix: str = ""):
+    """渲染 3 個身分輸入欄；所有頁共用同一個 widget key，狀態自動跨頁同步。"""
+    c_g, c_id, c_name = st.columns([1, 2, 2])
+    g = c_g.text_input("第幾組", key="voter_group", placeholder="例：3")
+    s = c_id.text_input("學號", key="voter_sid", placeholder="例：1130123")
+    n = c_name.text_input("姓名", key="voter_name", placeholder="例：王小明")
+    return g, s, n
+
+
+def s3():  # 投票（Google Sheet 連線版）
+    _persist_voter_state()
     st.markdown('<span class="tag">活動 1 · 即時投票</span>', unsafe_allow_html=True)
     st.markdown("""
 <div style="text-align:center;padding-top:4vh">
 <h1 class="st">你覺得統測哪一科<br>全班平均最低？</h1>
 </div>""", unsafe_allow_html=True)
 
-    if "v3" not in st.session_state:
-        st.session_state.v3 = {s: 0 for s in SUBJ}
+    QKEY = "lowest_subject"
+    options = list(SUBJ.keys())
+    counts = gsheet.get_votes(QKEY, options)
+    online = gsheet.is_connected()
+
+    group, sid, name = _voter_inputs("s3")
+
+    voted = bool(sid) and gsheet.has_voted(QKEY, sid)
+    can_vote = bool(group.strip()) and bool(sid.strip()) and bool(name.strip()) and not voted
+
+    if voted:
+        st.warning(f"⚠️ 學號 {sid} 已經投過票了，每人只能投一次")
+    elif not can_vote:
+        st.info("👆 請先填好 第幾組／學號／姓名 才能投票")
+
     cols = st.columns(5)
-    for (s, _), col in zip(SUBJ.items(), cols):
-        cnt = st.session_state.v3[s]
-        if col.button(f"**{s}**\n\n{cnt} 票", key=f"v3_{s}", use_container_width=True):
-            st.session_state.v3[s] += 1; st.rerun()
+    for s, col in zip(options, cols):
+        cnt = counts.get(s, 0)
+        if col.button(
+            f"**{s}**\n\n{cnt} 票",
+            key=f"v3_{s}",
+            use_container_width=True,
+            disabled=not can_vote,
+        ):
+            ok, msg = gsheet.add_vote(QKEY, s, group=group, student_id=sid, name=name)
+            if ok:
+                st.toast(f"✅ {name} 投給 {s}")
+            else:
+                st.error(msg)
+            st.rerun()
 
-    st.markdown("<div style='text-align:center;color:#555;font-size:18px;margin-top:12px'>"
-                "老師點按加票（或接 Slido / Kahoot）</div>", unsafe_allow_html=True)
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet（fallback：本機 session）"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
 
-    if st.button("🔍 揭曉答案", key="reveal3"):
+    c_reveal, c_reset = st.columns([3, 1])
+    if c_reveal.button("🔍 揭曉答案", key="reveal3", use_container_width=True):
         st.session_state.revealed3 = True
+    if c_reset.button("♻ 清除投票", key="reset3", use_container_width=True):
+        gsheet.reset_votes(QKEY)
+        st.session_state.revealed3 = False
+        st.rerun()
+
     if st.session_state.get("revealed3"):
         avgs = {s: wide[col].mean() for s, col in SUBJ.items()}
         lowest = min(avgs, key=avgs.get)
@@ -358,7 +435,15 @@ def s4():  # 揭曉長條圖
     avgs = {s: round(wide[col].mean(), 1) for s, col in SUBJ.items()}
     c_code, c_chart = st.columns([1, 2])
     with c_code:
-        st.code("df[ subj_cols ].mean()\n\n# 就這樣", language="python")
+        st.code(
+            'subj_cols = [\n'
+            '    "統測_國文分數", "統測_英文分數",\n'
+            '    "統測_數學B分數",\n'
+            '    "統測_專一分數", "統測_專二分數",\n'
+            ']\n'
+            'df[subj_cols].mean().sort_values()',
+            language="python",
+        )
         st.dataframe(pd.DataFrame(avgs.items(), columns=["科目","平均分數"])
                        .sort_values("平均分數"), hide_index=True, height=260)
     with c_chart:
@@ -367,26 +452,73 @@ def s4():  # 揭曉長條圖
                      color_discrete_sequence=px.colors.qualitative.Bold)
         fig.update_traces(textposition="outside", textfont_size=22)
         fig.update_layout(font_size=18, height=500, showlegend=False, yaxis_range=[0, 115])
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def s5():  # 陷阱題
+    _persist_voter_state()
     avgs = {s: wide[col].mean() for s, col in SUBJ.items()}
     lowest_s, lowest_v = min(avgs, key=avgs.get), round(min(avgs.values()), 1)
     st.markdown('<span class="tag">活動 2 · 數學老師</span>', unsafe_allow_html=True)
     st.markdown(f"""
-<div class="full center">
+<div style="text-align:center;padding-top:2vh">
 <h1 class="st">{lowest_s} 的平均是 {lowest_v} 分<br><br>
 那「中位數」會比平均數<br>
 <span style="color:#ff4b4b">高</span> 還是 <span style="color:#4b9eff">低</span>？
 </h1></div>""", unsafe_allow_html=True)
+
+    QKEY = "median_vs_mean"
+    options = ["高", "低"]
+    counts = gsheet.get_votes(QKEY, options)
+    online = gsheet.is_connected()
+
+    group, sid, name = _voter_inputs("s5")
+
+    voted = bool(sid) and gsheet.has_voted(QKEY, sid)
+    can_vote = bool(group.strip()) and bool(sid.strip()) and bool(name.strip()) and not voted
+
+    if voted:
+        st.warning(f"⚠️ 學號 {sid} 已經投過票了，每人只能投一次")
+    elif not can_vote:
+        st.info("👆 請先填好 第幾組／學號／姓名 才能投票")
+
     c1, c2 = st.columns(2)
-    hi = st.session_state.get("v5_hi", 0)
-    lo = st.session_state.get("v5_lo", 0)
-    if c1.button(f"🙋  比較**高**　　{hi} 人", key="v5h", use_container_width=True):
-        st.session_state.v5_hi = hi + 1; st.rerun()
-    if c2.button(f"🙋  比較**低**　　{lo} 人", key="v5l", use_container_width=True):
-        st.session_state.v5_lo = lo + 1; st.rerun()
+    hi = counts.get("高", 0)
+    lo = counts.get("低", 0)
+    if c1.button(
+        f"🙋  比較**高**　　{hi} 人",
+        key="v5h",
+        use_container_width=True,
+        disabled=not can_vote,
+    ):
+        ok, msg = gsheet.add_vote(QKEY, "高", group=group, student_id=sid, name=name)
+        if ok:
+            st.toast(f"✅ {name} 投了「高」")
+        else:
+            st.error(msg)
+        st.rerun()
+    if c2.button(
+        f"🙋  比較**低**　　{lo} 人",
+        key="v5l",
+        use_container_width=True,
+        disabled=not can_vote,
+    ):
+        ok, msg = gsheet.add_vote(QKEY, "低", group=group, student_id=sid, name=name)
+        if ok:
+            st.toast(f"✅ {name} 投了「低」")
+        else:
+            st.error(msg)
+        st.rerun()
+
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet（fallback：本機 session）"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def s6():  # 直方圖揭曉
@@ -400,34 +532,241 @@ def s6():  # 直方圖揭曉
     c_chart, c_exp = st.columns([3, 1])
     with c_chart:
         fig = px.histogram(data, nbins=35, labels={"value": f"{lowest_s} 分數", "count": "人數"})
-        fig.add_vline(x=mean_v, line_dash="dash", line_color="#ff4b4b", line_width=3,
-                      annotation_text=f"平均 {mean_v:.1f}", annotation_font_size=18)
-        fig.add_vline(x=med_v, line_color="#4bff91", line_width=3,
-                      annotation_text=f"中位數 {med_v:.1f}", annotation_font_size=18,
-                      annotation_position="bottom right")
-        fig.update_layout(font_size=18, height=520)
-        st.plotly_chart(fig, width="stretch")
+        # 平均數：紅色虛線，標註固定在「上方」
+        fig.add_vline(
+            x=mean_v, line_dash="dash", line_color="#ff4b4b", line_width=3,
+            annotation_text=f"<b>📊 平均數 = {mean_v:.1f}</b>",
+            annotation_font=dict(size=18, color="#ffffff"),
+            annotation_bgcolor="#ff4b4b",
+            annotation_bordercolor="#ff4b4b",
+            annotation_borderwidth=2,
+            annotation_borderpad=6,
+            annotation_position="top left",
+        )
+        # 中位數：綠色實線，標註固定在「下方」
+        fig.add_vline(
+            x=med_v, line_color="#22c55e", line_width=3,
+            annotation_text=f"<b>📍 中位數 = {med_v:.1f}</b>",
+            annotation_font=dict(size=18, color="#ffffff"),
+            annotation_bgcolor="#22c55e",
+            annotation_bordercolor="#22c55e",
+            annotation_borderwidth=2,
+            annotation_borderpad=6,
+            annotation_position="bottom right",
+        )
+        fig.update_layout(font_size=18, height=520, showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
     diff = med_v - mean_v
     direction = "左偏（負偏）" if diff > 0 else "右偏（正偏）"
     with c_exp:
         st.markdown(f"""
 <div class="big">
-<b>平均數</b><br>{mean_v:.1f}<br><br>
-<b>中位數</b><br>{med_v:.1f}<br><br>
-<b>差距</b><br>{abs(diff):.1f} 分<br><br>
+<div style="background:#ff4b4b;color:#fff;padding:10px;border-radius:8px;margin-bottom:10px">
+  <span style="font-size:14px">📊 紅色虛線</span><br>
+  <b>平均數</b><br>{mean_v:.1f}
+</div>
+<div style="background:#22c55e;color:#fff;padding:10px;border-radius:8px;margin-bottom:10px">
+  <span style="font-size:14px">📍 綠色實線</span><br>
+  <b>中位數</b><br>{med_v:.1f}
+</div>
+<b>差距</b>　{abs(diff):.1f} 分<br>
 <span style="color:#ff4b4b">{direction}</span><br><br>
-少數極低分<br>把平均往下拖
+<span style="font-size:14px;color:#aaa">少數極低分把平均往下拖</span>
 </div>""", unsafe_allow_html=True)
 
 
-def s7():  # 第二階段
-    st.markdown('<span class="tag phase">第二階段 · 約 20 分鐘</span>', unsafe_allow_html=True)
-    st.markdown('<h1 class="st">迷思破解與深度探索</h1>', unsafe_allow_html=True)
+def s_pay():  # 薪資中位數 vs 平均數小組討論
+    st.markdown('<span class="tag">活動 2 · 小組討論</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">真實案例：台灣薪資的真相</h2>', unsafe_allow_html=True)
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("""
+<div style="background:#fff3f3;padding:24px;border-radius:12px;text-align:center;border:2px solid #ff4b4b">
+  <div style="font-size:18px;color:#666">📊 平均薪資</div>
+  <div style="font-size:52px;font-weight:bold;color:#ff4b4b;margin:8px 0">47,884 元</div>
+  <div style="font-size:14px;color:#888">每月經常性薪資</div>
+</div>
+""", unsafe_allow_html=True)
+    with c2:
+        st.markdown("""
+<div style="background:#f3f7ff;padding:24px;border-radius:12px;text-align:center;border:2px solid #4b9eff">
+  <div style="font-size:18px;color:#666">📐 中位數薪資</div>
+  <div style="font-size:52px;font-weight:bold;color:#4b9eff;margin:8px 0">38,406 元</div>
+  <div style="font-size:14px;color:#888">較能反映中低薪族群感受</div>
+</div>
+""", unsafe_allow_html=True)
+
+    gap = 47884 - 38406
+    st.markdown(f"""
+<div style="text-align:center;margin-top:24px;font-size:22px">
+平均比中位數高 <b style="color:#ff4b4b">{gap:,} 元</b>
+</div>""", unsafe_allow_html=True)
+
     st.markdown("""
-<div class="big"><br>
-🎯 &nbsp;目標：從數據中找關聯，培養問對問題的能力<br><br>
-<b>活動 3</b> &nbsp;&nbsp;「國文好、數學差」的文組傳說存在嗎？<br>
-<b>活動 4</b> &nbsp;&nbsp;學生分組發想 5 分鐘
+---
+### 🗣️ 小組討論（2 分鐘）
+
+1. 剛才直方圖：平均**比中位數低**，是因為少數人考很差把平均**拖下去**
+2. 這次薪資反過來：**平均比中位數高**——
+   - 這代表台灣多數上班族的薪水，是**比平均高**還是**比平均低**？
+   - 為什麼會這樣？哪一群人會把平均「拉上去」？
+""")
+
+    QKEY = "salary_discussion"
+    online = gsheet.is_connected()
+
+    group, sid, name = _voter_inputs("s_pay")
+
+    discussion = st.text_area(
+        "✍️ 請輸入你們小組的討論結果",
+        key="s_pay_text",
+        height=140,
+        placeholder="例：客觀：薪資高的人將平均_____；主觀：多數上班族其實比平均低，新聞報的平均薪資不代表多數人的真實感受",
+    )
+
+    submitted = bool(sid) and gsheet.has_voted(QKEY, sid)
+    can_submit = (
+        bool(group.strip())
+        and bool(sid.strip())
+        and bool(name.strip())
+        and bool(discussion.strip())
+        and not submitted
+    )
+
+    if submitted:
+        st.warning(f"⚠️ 學號 {sid} 已經提交過討論了，每人只能交一次")
+    elif not can_submit:
+        st.info("👆 請填好 第幾組／學號／姓名 + 討論內容才能提交")
+
+    if st.button(
+        "📤 提交小組討論",
+        key="submit_pay",
+        use_container_width=True,
+        disabled=not can_submit,
+        type="primary",
+    ):
+        ok, msg = gsheet.add_vote(
+            QKEY, discussion.strip(), group=group, student_id=sid, name=name
+        )
+        if ok:
+            st.toast(f"✅ {name} 已提交")
+        else:
+            st.error(msg)
+        st.rerun()
+
+    status_text = (
+        "🟢 已連結 Google Sheet · 老師端可即時看到所有小組的討論"
+        if online
+        else "🟡 未連結 Google Sheet（fallback：本機 session）"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def s6b():  # 統測例題：出生人數中位數
+    st.markdown('<span class="tag">活動 2 · 例題演練</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">統測例題：出生人數的中位數</h2>', unsafe_allow_html=True)
+    st.caption("從國家發展委員會人口推估查詢系統可查詢到出生人數折線圖如下，根據圖表，判斷下列選項何者**錯誤**？")
+
+    # 1970–2007（依台灣戶政公開統計近似）
+    birth_old = {
+        1970:394015,1971:380439,1972:365749,1973:366942,1974:367823,1975:367647,
+        1976:423356,1977:395796,1978:410783,1979:422518,1980:413881,1981:414069,
+        1982:405263,1983:383439,1984:371008,1985:346208,1986:309230,1987:314024,
+        1988:342031,1989:315299,1990:335618,1991:321932,1992:321632,1993:325613,
+        1994:322938,1995:329581,1996:325545,1997:326002,1998:271450,1999:283661,
+        2000:305312,2001:260354,2002:247530,2003:227070,2004:216419,2005:205854,
+        2006:204459,2007:204414,
+    }
+    # 2008–2025（題目給定）
+    birth_new = {
+        2008:198733,2009:191310,2010:166886,2011:196627,2012:229481,2013:199113,
+        2014:210383,2015:213598,2016:208440,2017:193844,2018:181601,2019:177767,
+        2020:165249,2021:153820,2022:138986,2023:135571,2024:134856,2025:107812,
+    }
+    all_data = {**birth_old, **birth_new}
+    df = pd.DataFrame({"年度": list(all_data.keys()), "出生人數": list(all_data.values())})
+
+    c_chart, c_table = st.columns([2, 1])
+    with c_chart:
+        fig = px.line(df, x="年度", y="出生人數", markers=True,
+                      labels={"年度":"年", "出生人數":"出生人數"})
+        fig.update_traces(line_width=2, marker_size=5, marker_color="#4b9eff")
+        # 標出三個龍年
+        for dragon in [1976, 1988, 2000, 2012]:
+            if dragon in all_data:
+                fig.add_annotation(x=dragon, y=all_data[dragon],
+                                   text=f"🐉{dragon}", showarrow=True, arrowhead=2,
+                                   font_size=14, font_color="#ff4b4b", ay=-30)
+        fig.update_layout(font_size=15, height=420,
+                          xaxis=dict(dtick=3))
+        st.plotly_chart(fig, use_container_width=True)
+
+    with c_table:
+        st.markdown("##### 表（一）2008–2025")
+        tbl = pd.DataFrame({"年度": list(birth_new.keys()),
+                            "出生人數": list(birth_new.values())})
+        st.dataframe(tbl, hide_index=True, height=420)
+
+    st.markdown("""
+<div class="big" style="margin-top:8px">
+<b>(A)</b> 1976、1988、2000 這三年（龍年）的出生人數相較於其前一年（兔年）、後一年（蛇年）來得多<br>
+<b>(B)</b> 1970 年到 2025 年，出生人數的全距大於 30 萬人<br>
+<b>(C)</b> 2008 年到 2016 年，出生人數的中位數為 229481<br>
+<b>(D)</b> 2017 年到 2025 年，每一年的出生人數逐年減少
+</div>""", unsafe_allow_html=True)
+
+    cols = st.columns(4)
+    for i, opt in enumerate(["A", "B", "C", "D"]):
+        if cols[i].button(f"選 {opt}", key=f"s6b_{opt}", use_container_width=True):
+            st.session_state.s6b_pick = opt
+
+    if "s6b_pick" in st.session_state:
+        pick = st.session_state.s6b_pick
+        if pick == "C":
+            st.success("✅ 答對了！正確答案是 (C)")
+        else:
+            st.error(f"❌ 你選的是 ({pick})，再想想……")
+
+    if st.button("🔍 揭曉解析", key="s6b_reveal"):
+        st.session_state.s6b_show = True
+
+    if st.session_state.get("s6b_show"):
+        years_2008_2016 = list(range(2008, 2017))
+        vals = sorted(birth_new[y] for y in years_2008_2016)
+        median_correct = vals[len(vals)//2]
+        st.markdown(f"""
+<div style="background:#fff8e1;color:#222;padding:20px;border-radius:10px;margin-top:8px;border-left:6px solid #ff9800;font-size:18px;line-height:1.8">
+<b style="color:#d84315;font-size:22px">解析（答案 C 錯誤）</b><br><br>
+2008–2016 共 9 個數字，由小到大排序：<br>
+<code style="background:#fff;color:#1b5e20;padding:6px 10px;border-radius:6px;display:inline-block;margin:6px 0">{', '.join(f'{v:,}' for v in vals)}</code><br><br>
+取第 5 個（最中間的）即為中位數 = <span style="color:#d32f2f;font-weight:bold;font-size:30px">{median_correct:,}</span>　（≠ 229,481）<br><br>
+題目給的 <b>229,481</b> 其實是<b>最大值</b>，不是中位數！<br><br>
+👉 這就是為什麼上一頁要強調：<b>平均、中位數、最大值是三件不同的事</b>。
+</div>""", unsafe_allow_html=True)
+
+
+def s7():  # 第三階段：相關介紹引言
+    st.markdown('<h1 class="st">🔗 兩個變數之間，藏著什麼故事？</h1>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:2.0">
+<br>
+🧠 &nbsp;前面我們<b>一次只看一個科目</b>——平均、中位數、四分位數。<br><br>
+
+但你心裡可能在想：<br>
+　　💭 <span style="color:#ffcc00">「<b>國文好的人，數學是不是真的比較差？</b>」</span><br>
+　　💭 <span style="color:#ffcc00">「文組 vs 理組真的天差地別嗎？」</span><br><br>
+
+這些問題在問的，其實都是<b>兩個變數之間的關係</b>——<br>
+　　數學上叫它「<span style="color:#ff4b4b;font-weight:bold">相關性（Correlation）</span>」。<br><br>
+
+📌 &nbsp;這節課，我們要：<br>
+　　1. 學會用一個叫做「<b>相關係數 r</b>」的數字描述兩科的關係<br>
+　　2. 用三屆學長姐的真實成績<b>實際算一次</b><br>
+　　3. 揭曉「文組數學差」這個傳說，到底是真是假！
 </div>""", unsafe_allow_html=True)
 
 
@@ -541,7 +880,7 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
                             mode="lines", name="OLS 趨勢線",
                             line=dict(color="#ffcc00", width=4))
             fig.update_layout(font_size=18, height=480)
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
         with c_text:
             trend = "正相關 📈" if r > 0.1 else ("負相關 📉" if r < -0.1 else "幾乎無相關")
             st.markdown(f"""
@@ -589,15 +928,23 @@ def s9():  # 分組討論
                     st.session_state.ts = None; st.rerun()
 
 
-def s10():  # 第三階段
-    st.markdown('<span class="tag phase">第三階段 · 約 25 分鐘</span>', unsafe_allow_html=True)
-    st.markdown('<h1 class="st">資料視覺化（EDA）實作</h1>', unsafe_allow_html=True)
+def s10():  # 第二階段：圖表教學引言
+    st.markdown('<h1 class="st">📊 換個角度看資料</h1>', unsafe_allow_html=True)
     st.markdown("""
-<div class="big"><br>
-🎯 &nbsp;目標：將抽象數字轉化為視覺圖表，精準解讀背後的數學意義<br><br>
-<b>活動 5</b> &nbsp;&nbsp;折線圖 + 長條圖 + 箱型圖<br>
-<b>活動 6</b> &nbsp;&nbsp;Q₁ / Q₂ / Q₃ / IQR 的數學意義<br>
-<b>活動 7</b> &nbsp;&nbsp;EDA 總結
+<div class="big" style="line-height:2.0">
+<br>
+🤔 &nbsp;剛剛我們看到的<span style="color:#22c55e;font-weight:bold">那張中位數與平均數的圖</span>，它叫做什麼？<br><br>
+
+　　答：<b>直方圖（Histogram）</b>——把分數切成一段一段，看每段有幾個人。<br><br>
+
+📌 &nbsp;但只有直方圖是不夠的，不同的問題要用不同的圖：<br>
+　　• <b>趨勢</b>怎麼變？　→　<span style="color:#4b9eff">折線圖</span><br>
+　　• 不同<b>科別</b>誰高誰低？　→　<span style="color:#ffcc00">長條圖</span><br>
+　　• <b>整個分布</b>長什麼樣？離群值在哪？　→　<span style="color:#ff4b4b">箱型圖</span><br><br>
+
+🎯 &nbsp;這節課要學會一個強大的觀念：<br>
+　　<b>箱型圖裡的 Q₁、Q₂、Q₃</b>，其實就是統測公布的<br>
+　　<span style="color:#ffcc00;font-weight:bold;font-size:28px">頂標 / 前標 / 均標 / 後標 / 底標！</span>
 </div>""", unsafe_allow_html=True)
 
 
@@ -615,7 +962,7 @@ def s11():  # 折線 + 長條
                       markers=True, color_discrete_sequence=DEPT_COLOR)
         fig.update_traces(line_width=4, marker_size=14)
         fig.update_layout(font_size=18, height=460)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
     with tab_bar:
         rows2 = [{"科別":d,"科目":s,"平均分數":round(wide[wide["科別"]==d][col].mean(),1)}
                  for s,col in SUBJ.items() for d in DEPT_ORDER
@@ -625,7 +972,7 @@ def s11():  # 折線 + 長條
                      color_discrete_sequence=DEPT_COLOR)
         fig.update_traces(textposition="outside", textfont_size=14)
         fig.update_layout(font_size=18, height=460, yaxis_range=[0,115])
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def s12():  # 箱型圖
@@ -639,41 +986,54 @@ def s12():  # 箱型圖
                  points="outliers", color_discrete_sequence=DEPT_COLOR,
                  category_orders={"科目":list(SUBJ.keys()),"科別":DEPT_ORDER})
     fig.update_layout(font_size=18, height=560)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def s13():  # Q1/Q2/Q3
     st.markdown('<span class="tag">活動 6 · 數學老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">箱型圖裡的數學</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">箱型圖裡的數學 = 統測五標</h2>', unsafe_allow_html=True)
+    st.caption("💡 大會考完每年公布的「頂標／前標／均標／後標／底標」其實就是百分位數——箱型圖一張圖看完！")
+
     subj = st.selectbox("選一科來解說", list(SUBJ.keys()), key="s13s")
     data = wide[SUBJ[subj]].dropna()
-    q1, q2, q3 = data.quantile([.25, .5, .75])
+    p12, q1, q2, q3, p88 = data.quantile([.12, .25, .5, .75, .88])
     iqr = q3 - q1
     n_out = int(((data < q1 - 1.5*iqr) | (data > q3 + 1.5*iqr)).sum())
+
     c_chart, c_stats = st.columns([3, 1])
     with c_chart:
         fig = px.box(wide, y=SUBJ[subj], points="outliers",
                      labels={SUBJ[subj]: f"{subj} 分數"},
                      color_discrete_sequence=["#ff4b4b"])
-        for val, label, pos in [
-            (q1, f"Q₁ = {q1:.1f}（25%）",  "top right"),
-            (q2, f"Q₂ = {q2:.1f}（中位數）","bottom right"),
-            (q3, f"Q₃ = {q3:.1f}（75%）",  "top right"),
+        # 五個關鍵百分位數對應到統測五標
+        for val, label, color, pos in [
+            (p88, f"頂標 ≈ {p88:.1f}（前 12%）", "#ffcc00", "top right"),
+            (q3,  f"前標 = Q₃ = {q3:.1f}（前 25%）", "#aaa",   "top right"),
+            (q2,  f"均標 = Q₂ = {q2:.1f}（中位數）", "#aaa",   "bottom right"),
+            (q1,  f"後標 = Q₁ = {q1:.1f}（後 25%）", "#aaa",   "top right"),
+            (p12, f"底標 ≈ {p12:.1f}（後 12%）", "#ffcc00", "bottom right"),
         ]:
-            fig.add_hline(y=val, line_dash="dot", line_color="#aaa", line_width=2,
-                          annotation_text=label, annotation_font_size=16,
+            fig.add_hline(y=val, line_dash="dot", line_color=color, line_width=2,
+                          annotation_text=label, annotation_font_size=15,
                           annotation_position=pos)
         fig.update_layout(font_size=18, height=540)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
     with c_stats:
         st.markdown(f"""
 <div class="big">
-<b>Q₁</b>（25%）<br>{q1:.1f}<br><br>
-<b>Q₂</b> 中位數<br>{q2:.1f}<br><br>
-<b>Q₃</b>（75%）<br>{q3:.1f}<br><br>
-<b>IQR</b><br>{iqr:.1f}<br><br>
+<span style="color:#ffcc00"><b>頂標</b></span>（前 12%）<br>{p88:.1f}<br><br>
+<b>前標</b> = Q₃<br>{q3:.1f}<br><br>
+<b>均標</b> = Q₂（中位數）<br>{q2:.1f}<br><br>
+<b>後標</b> = Q₁<br>{q1:.1f}<br><br>
+<span style="color:#ffcc00"><b>底標</b></span>（後 12%）<br>{p12:.1f}<br><br>
+<b>IQR</b>（前–後標）<br>{iqr:.1f}<br><br>
 <span style="color:#ff4b4b">離群值</span><br>{n_out} 人
 </div>""", unsafe_allow_html=True)
+
+    st.info("📌 **統測五標的數學定義**：把全部考生分數**由高到低排序**，"
+            "**頂標**＝前 12% 的人的分數、**前標**＝前 25%（= Q₃）、"
+            "**均標**＝前 50%（= 中位數 Q₂）、**後標**＝前 75%（= Q₁）、**底標**＝前 88%。"
+            "所以箱型圖的箱體（Q₁ 到 Q₃）就是「**前標到後標**」這 50% 中間考生的範圍！")
 
 
 def s14():  # EDA 總結
@@ -687,14 +1047,28 @@ def s14():  # EDA 總結
 </div>""", unsafe_allow_html=True)
 
 
-def s15():  # 第四階段
-    st.markdown('<span class="tag phase">第四階段 · 約 30 分鐘</span>', unsafe_allow_html=True)
-    st.markdown('<h1 class="st">走向未來——數據預測</h1>', unsafe_allow_html=True)
+def s15():  # 第四階段：預測引言
+    st.markdown('<h1 class="st">🔮 看完過去，現在來預測未來</h1>', unsafe_allow_html=True)
     st.markdown("""
-<div class="big"><br>
-🎯 &nbsp;目標：從「看見過去」走向「預測未來」<br><br>
-<b>活動 8</b> &nbsp;&nbsp;第一次模考能決定統測成績嗎？（IT 老師）<br>
-<b>活動 9</b> &nbsp;&nbsp;預測的底層邏輯：最小平方法（數學老師）
+<div class="big" style="line-height:2.0">
+<br>
+👀 &nbsp;到現在，我們已經會：<br>
+　　• 用<b>直方圖、箱型圖</b>看清楚一科的分布<br>
+　　• 用<b>相關係數 r</b> 描述兩科之間的關係<br><br>
+
+但這些都只是<b>看見過去</b>。<br><br>
+
+🚀 &nbsp;最關鍵、也是大家最想問的一題：<br>
+　　<span style="color:#ff4b4b;font-weight:bold;font-size:32px">
+　　「我能不能用模考分數，預測自己的統測？」
+　　</span><br><br>
+
+📌 &nbsp;這節課我們要：<br>
+　　1. 在散佈圖上找出一條<b>最會預測的直線</b>　y = ax + b<br>
+　　2. 學會「最小平方法」——AI 與機器學習的<b>第一個演算法</b><br>
+　　3. <b>實機操作</b>：輸入你估計的模考分數，看看你的統測落點<br><br>
+
+⚠️ &nbsp;但記得：<b>預測有極限</b>，最後分數還是看你接下來這幾個月。
 </div>""", unsafe_allow_html=True)
 
 
@@ -792,7 +1166,7 @@ def s16():  # 提問 + 初始散佈圖
                      labels={"模5_總分數":"第5次模考總分","統測_總分數":"統測總分"},
                      color_discrete_sequence=["#4b9eff"])
     fig.update_layout(font_size=18, height=430)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
     st.caption("散佈圖：每個點是一位學長姐。是否有某種規律？")
 
 
@@ -819,7 +1193,7 @@ def s17():  # 相關係數互動
                     mode="lines", name="OLS 趨勢線",
                     line=dict(color="#ff4b4b", width=4))
     fig.update_layout(font_size=18, height=460)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
     st.info(f"💡 從模1到模5，r 值通常會逐漸上升——離統測越近，預測越準確。")
 
 
@@ -855,7 +1229,7 @@ def s18():  # 預測實機
                             textposition="top center",
                             marker=dict(size=18, color=color, symbol="star"))
         fig.update_layout(font_size=17, height=460)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
     st.markdown(f"**迴歸方程式：統測總分 ≈ {m_ols:.2f} × 模{exam}總分 + {b_ols:.1f}**")
 
@@ -890,7 +1264,7 @@ y = ax + b
                         name=f"y = {m:.2f}x + {b:.1f}",
                         line=dict(color="#ff4b4b", width=4))
         fig.update_layout(font_size=17, height=480, showlegend=True)
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
 
 def s20():  # 你來畫迴歸線
@@ -935,7 +1309,7 @@ def s20():  # 你來畫迴歸線
     fig.add_scatter(x=[p1x,p2x], y=[p1y,p2y], mode="markers",
                     name="你拉的兩點", marker=dict(size=16,color="#ffcc00",symbol="x"))
     fig.update_layout(font_size=17, height=420)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
     st.info("💡 OLS 的 SSE 是所有可能直線中最小的——不管怎麼拉，你的 SSE 永遠 ≥ OLS。"
             "這就是「最小平方法」名字的由來。")
 
@@ -972,7 +1346,7 @@ def s21():  # 殘差視覺化
     fig.update_layout(font_size=17, height=500,
                       xaxis_title="模5總分", yaxis_title="統測總分",
                       showlegend=True)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(fig, use_container_width=True)
 
     sse = float((sub_full["殘差"]**2).sum())
     rmse = float((sub_full["殘差"]**2).mean()**0.5)
@@ -1159,7 +1533,7 @@ def s21c():  # 推甄 vs 分發
             legend=dict(orientation="h", y=1.03),
             margin=dict(l=0, r=20, t=40, b=20),
         )
-        st.plotly_chart(fig, width="stretch")
+        st.plotly_chart(fig, use_container_width=True)
 
         if rec_best > dist_best:
             st.success(
@@ -1247,12 +1621,13 @@ def s22():  # 總結：打破預測
 
 # ═══════════════════════════════════════════════════════════════════
 SLIDE_FUNCS = [
-    s0, s1, s2, s3, s4, s5, s6,                         # 0–6
-    s7, s8a, s8b, s9,                                    # 7–10
-    s10, s11, s12, s13, s14,                             # 11–15
+    s0, s1, s2, s3, s4, s5, s6, s_pay, s6b,              # 0–8
+    s10, s11, s12, s13, s14,                             # 8–12（原第三階段：圖表教學）
+    s7, s8a, s8b, s9,                                    # 13–16（原第二階段：相關介紹）
     s15, s15b, s16, s17, s18, s19, s20, s21, s21b, s21c, s22,  # 16–26
 ]
 N = len(SLIDE_FUNCS)
 
+_persist_voter_state()  # 跨頁鎖住投票身分欄
 SLIDE_FUNCS[slide]()
 nav_bar(slide, N)
