@@ -142,6 +142,18 @@ def add_vote(
         return False, f"寫入失敗：{e}"
 
 
+def get_rows(question_key: str) -> list[list[str]]:
+    """讀取整個工作表的資料列（不含表頭）。讀不到時回 []。"""
+    ws = _sheet(question_key)
+    if ws is None:
+        return []
+    try:
+        rows = ws.get_all_values()
+        return rows[1:] if rows else []
+    except Exception:
+        return []
+
+
 def reset_votes(question_key: str):
     """清空一個問題的所有投票。"""
     ws = _sheet(question_key)

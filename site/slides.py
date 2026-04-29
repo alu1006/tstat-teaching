@@ -106,7 +106,8 @@ SLIDES_META = [
     ("①", "薪資真相（小組）",    ""),
     ("①", "統測例題：中位數",    ""),
     ("②", "第二階段說明",        "phase"),
-    ("②", "折線 + 長條圖",       ""),
+    ("②", "折線圖",              ""),
+    ("②", "長條圖",              ""),
     ("②", "箱型圖",              ""),
     ("②", "Q1/Q2/Q3/IQR",       ""),
     ("②", "EDA 總結",            ""),
@@ -151,7 +152,7 @@ _PHASE_FG = {"🏠": "#aaa", "①": "#ff8080", "②": "#6baeff",
 def _build_thumb_html(current: int) -> str:
     CONTENT_ICON = [
         "🎯","📣","🗂️","🤔","✅","⚠️","📊",
-        "📣","🔄","🧮","⏱️",
+        "📣","🔄","🧮","📈","📊",
         "📣","📈","📦","📐","🧐",
         "📣","📐","🤔","📈","🔮","➗","✏️","📏","🎯","⚖️","🏆",
     ]
@@ -928,56 +929,174 @@ def s9():  # 分組討論
                     st.session_state.ts = None; st.rerun()
 
 
-def s10():  # 第二階段：圖表教學引言
+_S10_QUESTIONS = [
+    ("第一次模擬考到統測分數趨勢怎麼變？", "折線圖"),
+    ("不同科別誰高誰低？", "長條圖"),
+    ("整個分布長什麼樣？離群值在哪？", "箱型圖"),
+]
+_S10_OPTIONS = ["折線圖", "長條圖", "箱型圖"]
+_S10_QKEY = "match_chart_pretest"
+
+
+def s10():  # 第二階段：圖表教學引言 + 連連看前測
+    _persist_voter_state()
     st.markdown('<h1 class="st">📊 換個角度看資料</h1>', unsafe_allow_html=True)
     st.markdown("""
 <div class="big" style="line-height:2.0">
 <br>
-🤔 &nbsp;剛剛我們看到的<span style="color:#22c55e;font-weight:bold">那張中位數與平均數的圖</span>，它叫做什麼？<br><br>
+🤔 &nbsp;剛剛我們看到的<span style="color:#22c55e;font-weight:bold">那張中位數與平均數的圖</span>，它叫做什麼？<br>
+</div>""", unsafe_allow_html=True)
 
-　　答：<b>直方圖（Histogram）</b>——把分數切成一段一段，看每段有幾個人。<br><br>
+    if st.button("🔍 揭曉答案", key="reveal_s10"):
+        st.session_state.revealed_s10 = True
+    if st.session_state.get("revealed_s10"):
+        st.markdown("""
+<div class="big" style="line-height:2.0">
+　　答：<b>直方圖（Histogram）</b>——把分數切成一段一段，看每段有幾個人。
+</div>""", unsafe_allow_html=True)
 
-📌 &nbsp;但只有直方圖是不夠的，不同的問題要用不同的圖：<br>
-　　• <b>趨勢</b>怎麼變？　→　<span style="color:#4b9eff">折線圖</span><br>
-　　• 不同<b>科別</b>誰高誰低？　→　<span style="color:#ffcc00">長條圖</span><br>
-　　• <b>整個分布</b>長什麼樣？離群值在哪？　→　<span style="color:#ff4b4b">箱型圖</span><br><br>
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+<br>
+📌 &nbsp;但只有直方圖是不夠的——<b>連連看：哪個問題該配哪種圖？</b>
+</div>""", unsafe_allow_html=True)
 
+    group, sid, name = _voter_inputs("s10")
+    online = gsheet.is_connected()
+    voted = bool(sid) and gsheet.has_voted(_S10_QKEY, sid)
+
+    picks: list[str] = []
+    for i, (q, _ans) in enumerate(_S10_QUESTIONS):
+        c_q, c_pick = st.columns([3, 2])
+        c_q.markdown(
+            f"<div style='font-size:22px;line-height:2.4'>{i+1}. {q}</div>",
+            unsafe_allow_html=True,
+        )
+        pick = c_pick.selectbox(
+            "配對",
+            ["（請選擇）"] + _S10_OPTIONS,
+            key=f"s10_pick_{i}",
+            label_visibility="collapsed",
+            disabled=voted,
+        )
+        picks.append(pick)
+
+    all_picked = all(p in _S10_OPTIONS for p in picks)
+    can_submit = (
+        bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
+        and all_picked and not voted
+    )
+
+    if voted:
+        st.warning(f"⚠️ 學號 {sid} 已經提交過了，每人只能交一次")
+    elif not (group.strip() and sid.strip() and name.strip()):
+        st.info("👆 請先填好 第幾組／學號／姓名")
+    elif not all_picked:
+        st.info("👆 三題都選好之後才能提交")
+
+    c_submit, c_reveal, c_reset = st.columns([2, 2, 1])
+    if c_submit.button("📨 提交配對", key="s10_submit",
+                       use_container_width=True, disabled=not can_submit):
+        choice_str = "|".join(picks)
+        ok, msg = gsheet.add_vote(
+            _S10_QKEY, choice_str, group=group, student_id=sid, name=name,
+        )
+        if ok:
+            st.toast(f"✅ {name} 已提交")
+        else:
+            st.error(msg)
+        st.rerun()
+
+    if c_reveal.button("🔍 揭曉答案", key="s10_reveal",
+                       use_container_width=True):
+        st.session_state.revealed_s10_match = True
+    if c_reset.button("♻ 清除", key="s10_reset", use_container_width=True):
+        gsheet.reset_votes(_S10_QKEY)
+        st.session_state.revealed_s10_match = False
+        st.rerun()
+
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:6px'>"
+        f"{'🟢 已連結 Google Sheet · 全班即時同步' if online else '🟡 未連結 Google Sheet（fallback：本機 session）'}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.get("revealed_s10_match"):
+        rows = gsheet.get_rows(_S10_QKEY)
+        total = len(rows)
+        per_q_correct = [0, 0, 0]
+        for r in rows:
+            if not r:
+                continue
+            parts = (r[0] or "").split("|")
+            for i, (_q, ans) in enumerate(_S10_QUESTIONS):
+                if i < len(parts) and parts[i] == ans:
+                    per_q_correct[i] += 1
+
+        st.markdown("#### ✅ 正解")
+        for i, (q, ans) in enumerate(_S10_QUESTIONS):
+            pct = (per_q_correct[i] / total * 100) if total else 0
+            st.markdown(
+                f"- **{q}** → <span style='color:#22c55e;font-weight:bold'>{ans}</span>"
+                + (f"　<span style='color:#888'>（全班 {per_q_correct[i]}/{total}，{pct:.0f}%）</span>" if total else ""),
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("""
+<div class="big" style="line-height:2.0">
+<br>
 🎯 &nbsp;這節課要學會一個強大的觀念：<br>
 　　<b>箱型圖裡的 Q₁、Q₂、Q₃</b>，其實就是統測公布的<br>
 　　<span style="color:#ffcc00;font-weight:bold;font-size:28px">頂標 / 前標 / 均標 / 後標 / 底標！</span>
 </div>""", unsafe_allow_html=True)
 
 
-def s11():  # 折線 + 長條
+def s11():  # 折線圖
     st.markdown('<span class="tag">活動 5 · 資訊老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">三種圖表・三種角度</h2>', unsafe_allow_html=True)
-    tab_line, tab_bar = st.tabs(["📈 折線圖：模考成績有進步嗎？","📊 長條圖：各科別 × 各科目"])
-    with tab_line:
-        dept_sel = st.multiselect("科別", DEPT_ORDER, default=DEPT_ORDER, key="s11d")
-        rows = [{"科別":d,"模考":f"模{i}",
-                 "平均分數":round(wide[wide["科別"]==d][f"模{i}_總分數"].mean(),1)}
-                for d in dept_sel for i in range(1,6)
-                if pd.notna(wide[wide["科別"]==d][f"模{i}_總分數"].mean())]
-        fig = px.line(pd.DataFrame(rows), x="模考", y="平均分數", color="科別",
-                      markers=True, color_discrete_sequence=DEPT_COLOR)
-        fig.update_traces(line_width=4, marker_size=14)
-        fig.update_layout(font_size=18, height=460)
-        st.plotly_chart(fig, use_container_width=True)
-    with tab_bar:
-        rows2 = [{"科別":d,"科目":s,"平均分數":round(wide[wide["科別"]==d][col].mean(),1)}
-                 for s,col in SUBJ.items() for d in DEPT_ORDER
-                 if pd.notna(wide[wide["科別"]==d][col].mean())]
-        fig = px.bar(pd.DataFrame(rows2), x="科目", y="平均分數",
-                     color="科別", barmode="group", text="平均分數",
-                     color_discrete_sequence=DEPT_COLOR)
-        fig.update_traces(textposition="outside", textfont_size=14)
-        fig.update_layout(font_size=18, height=460, yaxis_range=[0,115])
-        st.plotly_chart(fig, use_container_width=True)
+    st.markdown('<h2 class="st">📈 折線圖：模考成績有進步嗎？</h2>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+<b>折線圖</b>適合用於展示數據隨<b>連續時間</b>或其他<b>連續變數</b>（如距離、溫度）的<b>變化趨勢</b>。
+</div>""", unsafe_allow_html=True)
+    dept_sel = st.multiselect("科別", DEPT_ORDER, default=DEPT_ORDER, key="s11d")
+    rows = [{"科別":d,"模考":f"模{i}",
+             "平均分數":round(wide[wide["科別"]==d][f"模{i}_總分數"].mean(),1)}
+            for d in dept_sel for i in range(1,6)
+            if pd.notna(wide[wide["科別"]==d][f"模{i}_總分數"].mean())]
+    fig = px.line(pd.DataFrame(rows), x="模考", y="平均分數", color="科別",
+                  markers=True, color_discrete_sequence=DEPT_COLOR)
+    fig.update_traces(line_width=4, marker_size=14)
+    fig.update_layout(font_size=18, height=460)
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def s11b():  # 長條圖
+    st.markdown('<span class="tag">活動 5 · 資訊老師</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">📊 長條圖：各科別 × 各科目</h2>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+<b>長條圖</b>主要用於比較不同<b>類別</b>之間的數值大小、呈現<b>離散資料</b>的頻率分佈，或展示在一段時間內的趨勢。
+</div>""", unsafe_allow_html=True)
+    rows2 = [{"科別":d,"科目":s,"平均分數":round(wide[wide["科別"]==d][col].mean(),1)}
+             for s,col in SUBJ.items() for d in DEPT_ORDER
+             if pd.notna(wide[wide["科別"]==d][col].mean())]
+    fig = px.bar(pd.DataFrame(rows2), x="科目", y="平均分數",
+                 color="科別", barmode="group", text="平均分數",
+                 color_discrete_sequence=DEPT_COLOR)
+    fig.update_traces(textposition="outside", textfont_size=14)
+    fig.update_layout(font_size=18, height=460, yaxis_range=[0,115])
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def s12():  # 箱型圖
     st.markdown('<span class="tag">活動 5 · 重頭戲</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">箱型圖：一張圖看完所有分布</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">📦 箱型圖：一張圖看完所有分布</h2>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+<b>箱型圖</b>用<b>五個數字</b>（最小、Q₁、中位數、Q₃、最大）一次顯示資料的<b>分布範圍</b>與<b>離群值</b>，最適合在不同類別之間比較分散程度。<br>
+<span style="font-size:18px;color:#bbb">📌 離群值 = 落在 <b>Q₁ − 1.5×IQR</b> 以下 或 <b>Q₃ + 1.5×IQR</b> 以上的點（IQR = Q₃ − Q₁）</span>
+</div>""", unsafe_allow_html=True)
     subj_sel = st.multiselect("選科目", list(SUBJ.keys()), default=list(SUBJ.keys()), key="s12s")
     rows = [{"科別":r["科別"],"科目":s,"分數":r[col]}
             for s in subj_sel for col in [SUBJ[s]]
@@ -1006,17 +1125,25 @@ def s13():  # Q1/Q2/Q3
                      labels={SUBJ[subj]: f"{subj} 分數"},
                      color_discrete_sequence=["#ff4b4b"])
         # 五個關鍵百分位數對應到統測五標
-        for val, label, color, pos in [
-            (p88, f"頂標 ≈ {p88:.1f}（前 12%）", "#ffcc00", "top right"),
-            (q3,  f"前標 = Q₃ = {q3:.1f}（前 25%）", "#aaa",   "top right"),
-            (q2,  f"均標 = Q₂ = {q2:.1f}（中位數）", "#aaa",   "bottom right"),
-            (q1,  f"後標 = Q₁ = {q1:.1f}（後 25%）", "#aaa",   "top right"),
-            (p12, f"底標 ≈ {p12:.1f}（後 12%）", "#ffcc00", "bottom right"),
-        ]:
-            fig.add_hline(y=val, line_dash="dot", line_color=color, line_width=2,
-                          annotation_text=label, annotation_font_size=15,
-                          annotation_position=pos)
-        fig.update_layout(font_size=18, height=540)
+        marks = [
+            (p88, f"頂標 ≈ {p88:.1f}（前 12%）", "#ffcc00"),
+            (q3,  f"前標 = Q₃ = {q3:.1f}（前 25%）", "#aaa"),
+            (q2,  f"均標 = Q₂ = {q2:.1f}（中位數）", "#aaa"),
+            (q1,  f"後標 = Q₁ = {q1:.1f}（後 25%）", "#aaa"),
+            (p12, f"底標 ≈ {p12:.1f}（後 12%）", "#ffcc00"),
+        ]
+        for val, _label, color in marks:
+            fig.add_hline(y=val, line_dash="dot", line_color=color, line_width=2)
+        # 把標註放在圖外右側，依 y 值排列彼此不重疊
+        for val, label, color in marks:
+            fig.add_annotation(
+                x=1.02, xref="paper", xanchor="left",
+                y=val, yref="y",
+                text=label, showarrow=False,
+                font=dict(size=14, color=color),
+            )
+        fig.update_layout(font_size=18, height=540,
+                          margin=dict(l=60, r=200, t=40, b=40))
         st.plotly_chart(fig, use_container_width=True)
     with c_stats:
         st.markdown(f"""
@@ -1622,9 +1749,9 @@ def s22():  # 總結：打破預測
 # ═══════════════════════════════════════════════════════════════════
 SLIDE_FUNCS = [
     s0, s1, s2, s3, s4, s5, s6, s_pay, s6b,              # 0–8
-    s10, s11, s12, s13, s14,                             # 8–12（原第三階段：圖表教學）
-    s7, s8a, s8b, s9,                                    # 13–16（原第二階段：相關介紹）
-    s15, s15b, s16, s17, s18, s19, s20, s21, s21b, s21c, s22,  # 16–26
+    s10, s11, s11b, s12, s13, s14,                       # 9–14（原第三階段：圖表教學）
+    s7, s8a, s8b, s9,                                    # 15–18（原第二階段：相關介紹）
+    s15, s15b, s16, s17, s18, s19, s20, s21, s21b, s21c, s22,  # 19–29
 ]
 N = len(SLIDE_FUNCS)
 
