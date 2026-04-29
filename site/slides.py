@@ -108,8 +108,8 @@ SLIDES_META = [
     ("②", "第二階段說明",        "phase"),
     ("②", "折線圖",              ""),
     ("②", "長條圖",              ""),
-    ("②", "箱型圖",              ""),
     ("②", "Q1/Q2/Q3/IQR",       ""),
+    ("②", "箱型圖",              ""),
     ("②", "EDA 總結",            ""),
     ("③", "第三階段說明",        "phase"),
     ("③", "正相關 vs 負相關",      ""),
@@ -153,7 +153,7 @@ def _build_thumb_html(current: int) -> str:
     CONTENT_ICON = [
         "🎯","📣","🗂️","🤔","✅","⚠️","📊",
         "📣","🔄","🧮","📈","📊",
-        "📣","📈","📦","📐","🧐",
+        "📐","📦","📣","📐","🧐",
         "📣","📐","🤔","📈","🔮","➗","✏️","📏","🎯","⚖️","🏆",
     ]
     cards = []
@@ -1090,6 +1090,7 @@ def s11b():  # 長條圖
 
 
 def s12():  # 箱型圖
+    _persist_voter_state()
     st.markdown('<span class="tag">活動 5 · 重頭戲</span>', unsafe_allow_html=True)
     st.markdown('<h2 class="st">📦 箱型圖：一張圖看完所有分布</h2>', unsafe_allow_html=True)
     st.markdown("""
@@ -1107,11 +1108,81 @@ def s12():  # 箱型圖
     fig.update_layout(font_size=18, height=560)
     st.plotly_chart(fig, use_container_width=True)
 
+    # ── 學生分析輸入（寫入 Google Sheet） ─────────────────────────────
+    st.markdown("---")
+    st.markdown("### ✍️ 你的觀察")
+    st.caption("從這張箱型圖看出哪些事實？例：「商經科英文中位數比國貿科高」「數學的離群值最多、分布最寬」")
+
+    QKEY = "boxplot_analysis"
+    online = gsheet.is_connected()
+    group, sid, name = _voter_inputs("s12")
+    analysis = st.text_area(
+        "請寫下你看到的客觀觀察（兩三句話即可）",
+        key="s12_analysis_text",
+        height=120,
+        placeholder="例：商經科的英文 Q₃ 比國貿科高 5 分；數學的箱體最高最寬，代表平均高、但同學之間落差也最大。",
+    )
+
+    submitted = bool(sid) and gsheet.has_voted(QKEY, sid)
+    can_submit = (
+        bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
+        and bool(analysis.strip()) and not submitted
+    )
+    if submitted:
+        st.warning(f"⚠️ 學號 {sid} 已經提交過了，每人只能交一次")
+    elif not can_submit:
+        st.info("👆 請填好 第幾組／學號／姓名 + 觀察內容才能提交")
+
+    c_submit, c_reset = st.columns([4, 1])
+    if c_submit.button("📤 提交觀察", key="s12_submit",
+                       use_container_width=True, disabled=not can_submit,
+                       type="primary"):
+        ok, msg = gsheet.add_vote(
+            QKEY, analysis.strip(), group=group, student_id=sid, name=name,
+        )
+        if ok:
+            st.toast(f"✅ {name} 已提交")
+        else:
+            st.error(msg)
+        st.rerun()
+    if c_reset.button("♻ 清除", key="s12_reset", use_container_width=True):
+        gsheet.reset_votes(QKEY)
+        st.rerun()
+
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:6px'>"
+        f"{'🟢 已連結 Google Sheet · 全班即時同步' if online else '🟡 未連結 Google Sheet（fallback：本機 session）'}"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    # 老師可即時瀏覽全班觀察
+    rows_in = gsheet.get_rows(QKEY)
+    if rows_in:
+        with st.expander(f"👀 全班已交 {len(rows_in)} 份觀察（老師檢視用）", expanded=False):
+            for r in rows_in:
+                txt = r[0] if len(r) > 0 else ""
+                grp = r[2] if len(r) > 2 else ""
+                nm  = r[4] if len(r) > 4 else ""
+                st.markdown(f"- **第 {grp} 組 · {nm}**：{txt}")
+
+
+# 114 學年度四技二專統測各科官方三標（資料來源：教育部技專校院招生委員會）
+# 欄位：(到考人數, 平均分數, 前標, 均標, 後標, 群類標示)
+_TWE_114_THREE = {
+    "國文": (62766, 50.56, 62, 50, 40, "共同科目"),
+    "英文": (62655, 45.88, 64, 41, 26, "共同科目"),
+    "數學": (33543, 40.00, 52, 36, 24, "共同科目（數學 B）"),
+    "專一": (16107, 56.43, 70, 56, 42, "專業科目(一) · 商管外語群"),
+    "專二": (13713, 49.31, 64, 46, 32, "專業科目(二) · 商業與管理群"),
+}
+
 
 def s13():  # Q1/Q2/Q3
     st.markdown('<span class="tag">活動 6 · 數學老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">箱型圖裡的數學 = 統測五標</h2>', unsafe_allow_html=True)
-    st.caption("💡 大會考完每年公布的「頂標／前標／均標／後標／底標」其實就是百分位數——箱型圖一張圖看完！")
+    st.markdown('<h2 class="st">箱型圖裡的數學 = 統測三標</h2>', unsafe_allow_html=True)
+    st.caption("💡 統測每年公布「前標／均標／後標」三標，其實就是 Q₃／Q₂／Q₁——箱型圖的箱體！"
+               "（學測才公布五標，多了頂標、底標）")
 
     subj = st.selectbox("選一科來解說", list(SUBJ.keys()), key="s13s")
     data = wide[SUBJ[subj]].dropna()
@@ -1157,10 +1228,47 @@ def s13():  # Q1/Q2/Q3
 <span style="color:#ff4b4b">離群值</span><br>{n_out} 人
 </div>""", unsafe_allow_html=True)
 
-    st.info("📌 **統測五標的數學定義**：把全部考生分數**由高到低排序**，"
-            "**頂標**＝前 12% 的人的分數、**前標**＝前 25%（= Q₃）、"
-            "**均標**＝前 50%（= 中位數 Q₂）、**後標**＝前 75%（= Q₁）、**底標**＝前 88%。"
-            "所以箱型圖的箱體（Q₁ 到 Q₃）就是「**前標到後標**」這 50% 中間考生的範圍！")
+    st.info("📌 **統測三標的數學定義**：把全部考生分數**由高到低排序**，"
+            "**前標**＝前 25%（= Q₃）、**均標**＝前 50%（= 中位數 Q₂）、**後標**＝前 75%（= Q₁）。"
+            "所以箱型圖的箱體（Q₁ 到 Q₃）就是「**後標到前標**」這 50% 中間考生的範圍！"
+            "（圖上多畫的頂標/底標屬於學測系統，統測不公布）")
+
+    # ── 114 學年度全國統測官方三標 vs 本班 ─────────────────────────────
+    if subj in _TWE_114_THREE:
+        n, mean, top, mid, bot, group_label = _TWE_114_THREE[subj]
+        st.markdown(f"#### 📊 114 學年度全國統測 vs 本班（{subj}）")
+        st.caption(f"全國資料：{group_label} · 到考 {n:,} 人 · 平均 {mean:.2f}")
+        c_nat, c_cls = st.columns(2)
+        c_nat.markdown(f"""
+<div class="big" style="line-height:1.6">
+<b>🌐 全國 114 學年度</b><br>
+前標：<b>{top}</b>　·　均標：<b>{mid}</b>　·　後標：<b>{bot}</b>
+</div>""", unsafe_allow_html=True)
+        c_cls.markdown(f"""
+<div class="big" style="line-height:1.6">
+<b>🏫 本班</b>（n = {len(data)}，平均 {data.mean():.2f}）<br>
+前標 Q₃：<b>{q3:.1f}</b>　·　均標 Q₂：<b>{q2:.1f}</b>　·　後標 Q₁：<b>{q1:.1f}</b>
+</div>""", unsafe_allow_html=True)
+
+        # ── 客觀對照：本班 − 全國 ──────────────────────────────────
+        nat_iqr = top - bot
+        cls_iqr = q3 - q1
+        d_top, d_mid, d_bot = q3 - top, q2 - mid, q1 - bot
+        d_iqr = cls_iqr - nat_iqr
+        d_mean = data.mean() - mean
+        spread_word = (
+            "更集中（IQR 較窄）" if d_iqr < 0
+            else "更分散（IQR 較寬）" if d_iqr > 0
+            else "與全國一致"
+        )
+        st.info(
+            "**📌 客觀對照（本班 − 全國，正值＝本班較高）**\n\n"
+            f"- 前標 Q₃：{q3:.1f} − {top} = **{d_top:+.1f}** 分\n"
+            f"- 均標 Q₂：{q2:.1f} − {mid} = **{d_mid:+.1f}** 分\n"
+            f"- 後標 Q₁：{q1:.1f} − {bot} = **{d_bot:+.1f}** 分\n"
+            f"- 平均：{data.mean():.2f} − {mean:.2f} = **{d_mean:+.2f}** 分\n"
+            f"- 分布寬度（IQR）：本班 {cls_iqr:.1f} vs 全國 {nat_iqr} → 本班分布{spread_word}"
+        )
 
 
 def s14():  # EDA 總結
@@ -1749,7 +1857,7 @@ def s22():  # 總結：打破預測
 # ═══════════════════════════════════════════════════════════════════
 SLIDE_FUNCS = [
     s0, s1, s2, s3, s4, s5, s6, s_pay, s6b,              # 0–8
-    s10, s11, s11b, s12, s13, s14,                       # 9–14（原第三階段：圖表教學）
+    s10, s11, s11b, s13, s12, s14,                       # 9–14（原第三階段：圖表教學）
     s7, s8a, s8b, s9,                                    # 15–18（原第二階段：相關介紹）
     s15, s15b, s16, s17, s18, s19, s20, s21, s21b, s21c, s22,  # 19–29
 ]
