@@ -107,6 +107,7 @@ SLIDES_META = [
     ("①", "統測例題：中位數",    ""),
     ("②", "第二階段說明",        "phase"),
     ("②", "折線圖",              ""),
+    ("②", "統測來了",            ""),
     ("②", "長條圖",              ""),
     ("②", "Q1/Q2/Q3/IQR",       ""),
     ("②", "箱型圖",              ""),
@@ -114,15 +115,12 @@ SLIDES_META = [
     ("③", "第三階段說明",        "phase"),
     ("③", "正相關 vs 負相關",      ""),
     ("③", "相關係數 r 怎麼算",    ""),
+    ("③", "換你算：5 筆小資料",  ""),
     ("③", "分組討論計時",        ""),
     ("④", "第四階段說明",        "phase"),
-    ("④", "迴歸直線怎麼算？",   ""),
     ("④", "提問：能預測嗎？",    ""),
-    ("④", "相關係數 r 的變化",   ""),
-    ("④", "預測實機展示",        ""),
-    ("④", "y = ax + b 解說",    ""),
-    ("④", "你來畫迴歸線",        ""),
-    ("④", "殘差與 SSE 視覺化",   ""),
+    ("④", "迴歸直線怎麼算？",   ""),
+    ("④", "最小平方法 (OLS)",    ""),
     ("④", "模考→統測→落點",      ""),
     ("④", "推甄 vs 分發",        ""),
     ("④", "總結：打破預測",      ""),
@@ -152,9 +150,9 @@ _PHASE_FG = {"🏠": "#aaa", "①": "#ff8080", "②": "#6baeff",
 def _build_thumb_html(current: int) -> str:
     CONTENT_ICON = [
         "🎯","📣","🗂️","🤔","✅","⚠️","📊",
-        "📣","🔄","🧮","📈","📊",
+        "📣","🔄","🧮","📈","🎉","📊",
         "📐","📦","📣","📐","🧐",
-        "📣","📐","🤔","📈","🔮","➗","✏️","📏","🎯","⚖️","🏆",
+        "📣","📐","🤔","✏️","🔮","📈","🎯","🎯","⚖️","🏆",
     ]
     cards = []
     for i, (icon, title, kind) in enumerate(SLIDES_META):
@@ -757,9 +755,9 @@ def s7():  # 第三階段：相關介紹引言
 <br>
 🧠 &nbsp;前面我們<b>一次只看一個科目</b>——平均、中位數、四分位數。<br><br>
 
-但你心裡可能在想：<br>
-　　💭 <span style="color:#ffcc00">「<b>國文好的人，數學是不是真的比較差？</b>」</span><br>
-　　💭 <span style="color:#ffcc00">「文組 vs 理組真的天差地別嗎？」</span><br><br>
+有沒有聽過一個迷思：<br>
+　　💭 <span style="color:#ffcc00">「<b>國文好的人，數學比較差</b>」</span><br>
+　　💭 <span style="color:#ffcc00">「<b>會計好的人都比較細心</b>」</span><br><br>
 
 這些問題在問的，其實都是<b>兩個變數之間的關係</b>——<br>
 　　數學上叫它「<span style="color:#ff4b4b;font-weight:bold">相關性（Correlation）</span>」。<br><br>
@@ -810,10 +808,56 @@ def s8a():  # 教學：正相關 / 負相關 / 無相關
     st.markdown("---")
     st.markdown("""
 <div class="big">
-📐 &nbsp;<b>相關係數 r</b>（Pearson）是介於 <b>−1 到 +1</b> 的數字<br><br>
-&nbsp;&nbsp;&nbsp;&nbsp;r = +1　完美正相關（所有點在一條斜向上直線）<br>
-&nbsp;&nbsp;&nbsp;&nbsp;r =  0　無線性相關<br>
-&nbsp;&nbsp;&nbsp;&nbsp;r = −1　完美負相關（所有點在一條斜向下直線）<br><br>
+📐 &nbsp;<b>相關係數 r</b>（Pearson）是介於 <b>−1 到 +1</b> 的數字
+</div>""", unsafe_allow_html=True)
+
+    def _r_demo_fig(kind: str):
+        rng = np.random.default_rng(42)
+        _x = np.linspace(0, 10, 11)
+        if kind == "+1":
+            _y, color = _x, "#22c55e"
+        elif kind == "-1":
+            _y, color = 10 - _x, "#ff4b4b"
+        else:  # 0
+            _y, color = rng.uniform(0, 10, len(_x)), "#888"
+        _fig = px.scatter(x=_x, y=_y, labels={"x": "x", "y": "y"})
+        _fig.update_traces(marker=dict(size=14, color=color))
+        if kind in ("+1", "-1"):
+            x0, y0, x1, y1 = (0, 0, 10, 10) if kind == "+1" else (0, 10, 10, 0)
+            _fig.add_shape(type="line", x0=x0, y0=y0, x1=x1, y1=y1,
+                           line=dict(color=color, width=3, dash="dot"))
+        _fig.update_layout(height=320, font_size=16,
+                           margin=dict(l=40, r=20, t=20, b=40),
+                           xaxis=dict(range=[-1, 11]), yaxis=dict(range=[-1, 11]))
+        return _fig
+
+    st.markdown("""
+<div class="big">
+&nbsp;&nbsp;&nbsp;&nbsp;r = +1　完美正相關（所有點在一條斜向上直線）
+</div>""", unsafe_allow_html=True)
+    with st.expander("👀 點我看 r = +1 長什麼樣子"):
+        st.plotly_chart(_r_demo_fig("+1"), use_container_width=True)
+        st.caption("所有點精準落在同一條斜向上的直線上 → r = +1（x 越大，y 等比例越大）")
+
+    st.markdown("""
+<div class="big">
+&nbsp;&nbsp;&nbsp;&nbsp;r =  0　無線性相關
+</div>""", unsafe_allow_html=True)
+    with st.expander("👀 點我看 r = 0 長什麼樣子"):
+        st.plotly_chart(_r_demo_fig("0"), use_container_width=True)
+        st.caption("點散得到處都是、看不出方向 → r ≈ 0（x 跟 y 沒有線性關係）")
+
+    st.markdown("""
+<div class="big">
+&nbsp;&nbsp;&nbsp;&nbsp;r = −1　完美負相關（所有點在一條斜向下直線）
+</div>""", unsafe_allow_html=True)
+    with st.expander("👀 點我看 r = −1 長什麼樣子"):
+        st.plotly_chart(_r_demo_fig("-1"), use_container_width=True)
+        st.caption("所有點精準落在同一條斜向下的直線上 → r = −1（x 越大，y 等比例越小）")
+
+    st.markdown("""
+<div class="big">
+<br>
 ❓ 那「國文高分的人，數學分數」是正相關、負相關、還是無相關？
 </div>""", unsafe_allow_html=True)
 
@@ -830,7 +874,9 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
     r     = sub[["統測_國文分數","統測_數學B分數"]].corr().iloc[0, 1]
     n     = len(sub)
 
-    tab_f, tab_calc, tab_reveal = st.tabs(["📐 公式", "🔢 代入計算（國文 vs 數學）", "✅ 揭曉趨勢線"])
+    tab_f, tab_viz, tab_calc, tab_reveal = st.tabs(
+        ["📐 公式", "🎨 圖解（四象限）", "🔢 代入計算（國文 vs 數學）", "✅ 揭曉趨勢線"]
+    )
 
     with tab_f:
         st.markdown("#### 相關係數公式（Pearson）")
@@ -844,6 +890,66 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
 </div>""", unsafe_allow_html=True)
         st.latex(r"r = \frac{1}{n-1}\sum_{i=1}^{n}\frac{x_i-\bar{x}}{s_x}\cdot\frac{y_i-\bar{y}}{s_y}")
         st.info("每個 (xi−x̄)/sx 就是 **z-score（標準分數）**；r 就是兩組 z-score 乘積的平均！")
+
+    with tab_viz:
+        st.markdown("#### 把每個學生的 (xi − x̄)(yi − ȳ) 畫出來")
+        st.caption(
+            "把每個點和『平均線』比較：右上＋左下 → 正貢獻（綠）；左上＋右下 → 負貢獻（紅）。"
+            "綠多紅少 → r 為正；紅多綠少 → r 為負。"
+        )
+        c_opt1, c_opt2, c_opt3 = st.columns([2, 2, 2])
+        show = c_opt1.radio("顯示哪些點？", ["全部", "只看正貢獻", "只看負貢獻"],
+                            horizontal=True, key="s8b_viz_show")
+        show_rect = c_opt2.checkbox("顯示貢獻矩形（面積 ∝ |貢獻|）", value=False,
+                                    key="s8b_viz_rect")
+        sample_n = c_opt3.slider("抽樣顯示（避免過密）", 30, len(sub), 150, step=10,
+                                 key="s8b_viz_n")
+
+        viz = sub.sample(int(sample_n), random_state=1).copy()
+        viz["dx"] = viz["統測_國文分數"] - x_bar
+        viz["dy"] = viz["統測_數學B分數"] - y_bar
+        viz["貢獻"] = viz["dx"] * viz["dy"]
+        viz["sign"] = np.where(viz["貢獻"] >= 0, "正貢獻 (右上＋左下)", "負貢獻 (左上＋右下)")
+        if show == "只看正貢獻":
+            viz = viz[viz["貢獻"] >= 0]
+        elif show == "只看負貢獻":
+            viz = viz[viz["貢獻"] < 0]
+
+        fig_v = px.scatter(
+            viz, x="統測_國文分數", y="統測_數學B分數", color="sign",
+            color_discrete_map={"正貢獻 (右上＋左下)": "#22c55e",
+                                "負貢獻 (左上＋右下)": "#ff4b4b"},
+            labels={"統測_國文分數": "國文 (x)", "統測_數學B分數": "數學 (y)"},
+            opacity=0.7,
+        )
+        fig_v.update_traces(marker=dict(size=9))
+        fig_v.add_vline(x=x_bar, line_dash="dash", line_color="#888",
+                        annotation_text=f"x̄ = {x_bar:.1f}", annotation_position="top")
+        fig_v.add_hline(y=y_bar, line_dash="dash", line_color="#888",
+                        annotation_text=f"ȳ = {y_bar:.1f}", annotation_position="right")
+        if show_rect:
+            for _, row in viz.iterrows():
+                rcolor = "#22c55e" if row["貢獻"] >= 0 else "#ff4b4b"
+                fig_v.add_shape(type="rect", x0=x_bar, y0=y_bar,
+                                x1=row["統測_國文分數"], y1=row["統測_數學B分數"],
+                                line=dict(color=rcolor, width=0),
+                                fillcolor=rcolor, opacity=0.06, layer="below")
+        fig_v.update_layout(font_size=16, height=480, legend_title_text="")
+        st.plotly_chart(fig_v, use_container_width=True)
+
+        n_pos = int((sub["統測_國文分數"] - x_bar).mul(sub["統測_數學B分數"] - y_bar).ge(0).sum())
+        n_neg = len(sub) - n_pos
+        sum_xy = float(((sub["統測_國文分數"] - x_bar) * (sub["統測_數學B分數"] - y_bar)).sum())
+        denom  = (len(sub) - 1) * sx * sy
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("正貢獻人數", f"{n_pos:,}")
+        c2.metric("負貢獻人數", f"{n_neg:,}")
+        c3.metric("Σ (xi−x̄)(yi−ȳ)", f"{sum_xy:,.0f}")
+        c4.metric("r", f"{sum_xy/denom:.3f}")
+        st.caption(
+            "📌 r 的正負完全由分子決定：把所有 (xi−x̄)(yi−ȳ) 加總；"
+            "分母 (n−1)·sx·sy 只是把它縮放到 [−1, +1]。"
+        )
 
     with tab_calc:
         st.markdown(f"""
@@ -892,6 +998,94 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
 打破「文武不能雙全」迷思！<br><br>
 ⚠️ 相關性<br>≠ 因果關係
 </div>""", unsafe_allow_html=True)
+
+
+def s8c():  # 小數字練習：手算 r + 四象限
+    st.markdown('<span class="tag">活動 3 · 動手練習</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">✏️ 換你算：5 筆小資料的 r</h2>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+真實資料太多，先用 <b>5 筆乾淨數字</b>練手感。<br>
+口訣：<b>右上＋左下 = 正貢獻</b>　　<b>左上＋右下 = 負貢獻</b>
+</div>""", unsafe_allow_html=True)
+
+    data = pd.DataFrame({"i": [1, 2, 3, 4, 5],
+                         "x": [1, 2, 3, 4, 5],
+                         "y": [2, 3, 5, 4, 6]})
+    x_bar = data["x"].mean()
+    y_bar = data["y"].mean()
+    sx = data["x"].std()
+    sy = data["y"].std()
+    data["xi−x̄"] = data["x"] - x_bar
+    data["yi−ȳ"] = data["y"] - y_bar
+    data["(xi−x̄)(yi−ȳ)"] = data["xi−x̄"] * data["yi−ȳ"]
+    sum_xy = data["(xi−x̄)(yi−ȳ)"].sum()
+    n = len(data)
+    r = sum_xy / ((n - 1) * sx * sy)
+
+    c_left, c_right = st.columns([1, 1])
+
+    with c_left:
+        st.markdown("#### 📋 資料")
+        st.dataframe(data[["i", "x", "y"]], hide_index=True, use_container_width=True)
+
+        with st.expander("Step 1：先算 x̄ 和 ȳ"):
+            st.latex(rf"\bar{{x}} = \frac{{1+2+3+4+5}}{{5}} = {x_bar:.0f}")
+            st.latex(rf"\bar{{y}} = \frac{{2+3+5+4+6}}{{5}} = {y_bar:.0f}")
+
+        with st.expander("Step 2：每筆 (xi−x̄)、(yi−ȳ) 與乘積"):
+            st.dataframe(
+                data[["i", "x", "y", "xi−x̄", "yi−ȳ", "(xi−x̄)(yi−ȳ)"]],
+                hide_index=True, use_container_width=True
+            )
+            st.latex(rf"\sum (x_i-\bar{{x}})(y_i-\bar{{y}}) = {sum_xy:.0f}")
+
+        with st.expander("Step 3：算 sx, sy"):
+            st.latex(rf"s_x = \sqrt{{\tfrac{{(x_i-\bar{{x}})^2}}{{n-1}}}} = {sx:.3f}")
+            st.latex(rf"s_y = \sqrt{{\tfrac{{(y_i-\bar{{y}})^2}}{{n-1}}}} = {sy:.3f}")
+
+        with st.expander("Step 4：套公式得 r"):
+            st.latex(
+                rf"r = \frac{{\sum(x_i-\bar{{x}})(y_i-\bar{{y}})}}{{(n-1)\,s_x\,s_y}}"
+                rf" = \frac{{{sum_xy:.0f}}}{{4 \times {sx:.3f} \times {sy:.3f}}}"
+                rf" = {r:.3f}"
+            )
+            st.success(f"答案：**r = {r:.2f}**　→ 強正相關 📈")
+
+    with c_right:
+        st.markdown("#### 🎨 四象限圖")
+        viz = data.copy()
+        viz["sign"] = np.where(viz["(xi−x̄)(yi−ȳ)"] >= 0,
+                               "正貢獻 (右上＋左下)", "負貢獻 (左上＋右下)")
+        fig = px.scatter(
+            viz, x="x", y="y", color="sign", text="i",
+            color_discrete_map={"正貢獻 (右上＋左下)": "#22c55e",
+                                "負貢獻 (左上＋右下)": "#ff4b4b"},
+            labels={"x": "x", "y": "y"},
+        )
+        fig.update_traces(marker=dict(size=20), textposition="top center",
+                          textfont=dict(size=14, color="#fff"))
+        fig.add_vline(x=x_bar, line_dash="dash", line_color="#888",
+                      annotation_text=f"x̄ = {x_bar:.0f}", annotation_position="top")
+        fig.add_hline(y=y_bar, line_dash="dash", line_color="#888",
+                      annotation_text=f"ȳ = {y_bar:.0f}", annotation_position="right")
+        # 每個點畫貢獻矩形
+        for _, row in viz.iterrows():
+            rcolor = "#22c55e" if row["(xi−x̄)(yi−ȳ)"] >= 0 else "#ff4b4b"
+            fig.add_shape(type="rect", x0=x_bar, y0=y_bar, x1=row["x"], y1=row["y"],
+                          line=dict(color=rcolor, width=1),
+                          fillcolor=rcolor, opacity=0.15, layer="below")
+        fig.update_layout(font_size=16, height=440, legend_title_text="",
+                          legend=dict(orientation="h", y=-0.2))
+        st.plotly_chart(fig, use_container_width=True)
+
+        n_pos = int((data["(xi−x̄)(yi−ȳ)"] >= 0).sum())
+        n_neg = n - n_pos
+        c1, c2, c3 = st.columns(3)
+        c1.metric("正貢獻", f"{n_pos} 點")
+        c2.metric("負貢獻", f"{n_neg} 點")
+        c3.metric("Σ", f"{sum_xy:.0f}")
+        st.caption("綠色矩形 = 正貢獻；矩形面積 ∝ |(xi−x̄)(yi−ȳ)|。")
 
 
 def s9():  # 分組討論
@@ -1052,7 +1246,7 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
 </div>""", unsafe_allow_html=True)
 
 
-def s11():  # 折線圖
+def s11():  # 折線圖（只看 模1–模5 的趨勢）
     st.markdown('<span class="tag">活動 5 · 資訊老師</span>', unsafe_allow_html=True)
     st.markdown('<h2 class="st">📈 折線圖：模考成績有進步嗎？</h2>', unsafe_allow_html=True)
     st.markdown("""
@@ -1060,15 +1254,62 @@ def s11():  # 折線圖
 <b>折線圖</b>適合用於展示數據隨<b>連續時間</b>或其他<b>連續變數</b>（如距離、溫度）的<b>變化趨勢</b>。
 </div>""", unsafe_allow_html=True)
     dept_sel = st.multiselect("科別", DEPT_ORDER, default=DEPT_ORDER, key="s11d")
-    rows = [{"科別":d,"模考":f"模{i}",
-             "平均分數":round(wide[wide["科別"]==d][f"模{i}_總分數"].mean(),1)}
-            for d in dept_sel for i in range(1,6)
-            if pd.notna(wide[wide["科別"]==d][f"模{i}_總分數"].mean())]
-    fig = px.line(pd.DataFrame(rows), x="模考", y="平均分數", color="科別",
-                  markers=True, color_discrete_sequence=DEPT_COLOR)
+    stages = [(f"模{i}", f"模{i}_總分數") for i in range(1, 6)]
+    rows = [{"科別": d, "考試": stage,
+             "平均分數": round(wide[wide["科別"] == d][col].mean(), 1)}
+            for d in dept_sel for stage, col in stages
+            if pd.notna(wide[wide["科別"] == d][col].mean())]
+    fig = px.line(pd.DataFrame(rows), x="考試", y="平均分數", color="科別",
+                  markers=True, color_discrete_sequence=DEPT_COLOR,
+                  category_orders={"考試": [s for s, _ in stages]})
     fig.update_traces(line_width=4, marker_size=14)
     fig.update_layout(font_size=18, height=460)
     st.plotly_chart(fig, use_container_width=True)
+    st.caption("📈 從模1到模5，看起來各科別都穩定成長 — 那正式統測呢？下一頁揭曉。")
+
+
+def s11c():  # 統測來了（揭曉 模5→統測 落差）
+    st.markdown('<span class="tag">活動 5 · 揭曉</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">🎉 統測來了！</h2>', unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+模1→模5 看起來大家都穩定進步⋯⋯<b>那正式統測呢？</b>
+</div>""", unsafe_allow_html=True)
+    dept_sel = st.multiselect("科別", DEPT_ORDER, default=DEPT_ORDER, key="s11cd")
+    stages = [(f"模{i}", f"模{i}_總分數") for i in range(1, 6)] + [("統測", "統測_總分數")]
+    rows = [{"科別": d, "考試": stage,
+             "平均分數": round(wide[wide["科別"] == d][col].mean(), 1)}
+            for d in dept_sel for stage, col in stages
+            if pd.notna(wide[wide["科別"] == d][col].mean())]
+    df = pd.DataFrame(rows)
+    fig = px.line(df, x="考試", y="平均分數", color="科別",
+                  markers=True, color_discrete_sequence=DEPT_COLOR,
+                  category_orders={"考試": [s for s, _ in stages]})
+    fig.update_traces(line_width=4, marker_size=14)
+    # 強調 模5 → 統測 的落差
+    for d in dept_sel:
+        sub = df[df["科別"] == d].set_index("考試")
+        if "模5" in sub.index and "統測" in sub.index:
+            y5 = sub.loc["模5", "平均分數"]
+            yt = sub.loc["統測", "平均分數"]
+            color = DEPT_COLOR[DEPT_ORDER.index(d) % len(DEPT_COLOR)]
+            fig.add_trace(go.Scatter(
+                x=["模5", "統測"], y=[y5, yt],
+                mode="lines",
+                line=dict(color=color, width=8, dash="dash"),
+                showlegend=False, hoverinfo="skip",
+            ))
+            fig.add_annotation(
+                x="統測", y=yt, text=f"Δ {yt - y5:+.1f}",
+                showarrow=False, yshift=20 if yt >= y5 else -20,
+                font=dict(color=color, size=15),
+            )
+    fig.add_annotation(x="統測", y=1.0, yref="paper", yanchor="bottom",
+                       text="↓ 正式統測", showarrow=False,
+                       font=dict(color="#ffcc00", size=14))
+    fig.update_layout(font_size=18, height=500)
+    st.plotly_chart(fig, use_container_width=True)
+    st.info("💡 虛線標出的是「模5 → 統測」的落差。**模考分數高，統測未必同樣高**——這正是後面要追的問題。")
 
 
 def s11b():  # 長條圖
@@ -1326,8 +1567,8 @@ def s15b():  # 迴歸直線教學（高職程度）
     a     = r * sy / sx
     b     = y_bar - a * x_bar
 
-    tab_step, tab_formula, tab_verify = st.tabs(
-        ["📋 步驟說明", "📐 公式與代入", "✅ 驗證"])
+    tab_step, tab_formula, tab_verify, tab_code = st.tabs(
+        ["📋 步驟說明", "📐 公式與代入", "✅ 驗證", "💻 程式碼做法"])
 
     with tab_step:
         st.markdown(f"""
@@ -1343,6 +1584,58 @@ def s15b():  # 迴歸直線教學（高職程度）
 &nbsp;&nbsp;&nbsp;&nbsp;a = r × (s_y ÷ s_x) = {r:.4f} × ({sy:.2f} ÷ {sx:.2f}) = <b>{a:.4f}</b><br>
 &nbsp;&nbsp;&nbsp;&nbsp;b = ȳ − a × x̄ = {y_bar:.1f} − {a:.4f} × {x_bar:.1f} = <b>{b:.1f}</b>
 </div>""", unsafe_allow_html=True)
+
+        with st.expander("🤔 為什麼要截距 b？不能只有 y = ax 嗎？"):
+            st.markdown(f"""
+**a 決定「斜的方向」、b 決定「上下平移的位置」——少一個，線就唯一不下來。**
+
+**① 數學角度：直線一定要過重心 (x̄, ȳ)**
+
+我們希望線通過資料中心 (x̄, ȳ) = ({x_bar:.1f}, {y_bar:.1f})。
+若只有 y = ax，x = {x_bar:.1f} 時 y = {a:.4f} × {x_bar:.1f} = **{a*x_bar:.1f}**——
+但 ȳ = **{y_bar:.1f}**，差了 **{b:.1f}** 分。
+這個落差就是截距 b 補上去的高度。
+
+**② 直觀角度：起跑點不一樣**
+
+模考 0 分的人不會在統測也考 0 分；資料告訴我們：x = 0 時 y ≈ **{b:.1f}**。
+b 就是線在 y 軸上的「起點」（外推到 x=0 的預測值）。
+
+下圖紅色虛線是「**強制 b = 0**（過原點）」的迴歸線，整條線被卡低，誤差暴增；
+綠線是 **正常含 b** 的迴歸線，貼著資料中心走。
+""")
+            xs_b = np.linspace(0, sub[x_col].max(), 60)
+            fig_b = go.Figure()
+            fig_b.add_trace(go.Scatter(
+                x=sub[x_col], y=sub["統測_總分數"],
+                mode="markers",
+                marker=dict(color="#888", size=6, opacity=0.35),
+                name="實際資料",
+            ))
+            fig_b.add_trace(go.Scatter(
+                x=xs_b, y=a * xs_b + b, mode="lines",
+                line=dict(color="#22c55e", width=4),
+                name=f"含截距：y = {a:.3f}x + {b:.1f}",
+            ))
+            fig_b.add_trace(go.Scatter(
+                x=xs_b, y=a * xs_b, mode="lines",
+                line=dict(color="#ff4b4b", width=4, dash="dash"),
+                name=f"強制 b=0：y = {a:.3f}x",
+            ))
+            fig_b.add_trace(go.Scatter(
+                x=[x_bar], y=[y_bar], mode="markers+text",
+                marker=dict(color="#ffcc00", size=14, symbol="x"),
+                text=["(x̄, ȳ) 重心"], textposition="top right",
+                textfont=dict(color="#ffcc00", size=13),
+                name="資料重心", showlegend=False,
+            ))
+            fig_b.update_layout(
+                height=380, font_size=14,
+                xaxis_title=f"模{exam}總分 (x)", yaxis_title="統測總分 (y)",
+                legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.02),
+            )
+            st.plotly_chart(fig_b, use_container_width=True)
+            st.caption("綠線過 (x̄, ȳ) 重心、誤差²總和最小；紅線被原點綁住，整條偏低——這就是 b 存在的理由。")
 
     with tab_formula:
         st.markdown("#### 斜率公式（兩種等價寫法）")
@@ -1384,17 +1677,122 @@ def s15b():  # 迴歸直線教學（高職程度）
                               "yi − ȳ", "(xi−x̄)(yi−ȳ)", "(xi−x̄)²"]],
                      hide_index=True)
 
+    with tab_code:
+        st.markdown("#### 用程式碼算同一件事")
+        st.caption(f"用模{exam}總分當 x、統測總分當 y。下面三種寫法結果一致。")
+
+        st.markdown("**① pandas 一行算 r、平均、標準差**")
+        st.code(f"""import pandas as pd
+
+df = pd.read_csv("01_wide_scores.csv")
+sub = df[["模{exam}_總分數", "統測_總分數"]].dropna()
+
+x_bar = sub["模{exam}_總分數"].mean()    # → {x_bar:.1f}
+y_bar = sub["統測_總分數"].mean()        # → {y_bar:.1f}
+sx    = sub["模{exam}_總分數"].std()     # → {sx:.2f}
+sy    = sub["統測_總分數"].std()         # → {sy:.2f}
+r     = sub.corr().iloc[0, 1]           # → {r:.4f}
+
+a = r * sy / sx        # → {a:.4f}
+b = y_bar - a * x_bar  # → {b:.1f}
+print(f"y = {{a:.4f}} x + {{b:.1f}}")
+""", language="python")
+
+        st.markdown("**② numpy：直接套定義公式**")
+        st.code(f"""import numpy as np
+
+x = sub["模{exam}_總分數"].to_numpy()
+y = sub["統測_總分數"].to_numpy()
+
+a = np.sum((x - x.mean()) * (y - y.mean())) / np.sum((x - x.mean()) ** 2)
+b = y.mean() - a * x.mean()
+# a = {a:.4f}, b = {b:.1f}
+""", language="python")
+
+        st.markdown("**③ scikit-learn：機器學習函式庫**")
+        st.code(f"""from sklearn.linear_model import LinearRegression
+
+model = LinearRegression().fit(sub[["模{exam}_總分數"]], sub["統測_總分數"])
+a = model.coef_[0]      # → {a:.4f}
+b = model.intercept_    # → {b:.1f}
+""", language="python")
+
+        st.info("💡 三種寫法都給同樣的 a 和 b——數學公式跟程式碼算的是同一件事，只是抽象程度不同。")
+
+
+def s15c():  # 最小平方法 (OLS)
+    st.markdown('<span class="tag">活動 8 後置 · 連結 AI</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">🎯 最小平方法：那條線為什麼是「最佳」？</h2>',
+                unsafe_allow_html=True)
+    st.markdown("""
+<div class="big" style="line-height:1.8">
+剛剛公式跑出來的 a 和 b 不是隨便挑的——它們讓
+<b>所有點到線的距離²總和</b>（SSE）達到<b>最小值</b>。<br><br>
+這個演算法叫做：
+<span style="color:#ff4b4b;font-weight:bold;font-size:30px">最小平方法（Ordinary Least Squares, OLS）</span>
+</div>""", unsafe_allow_html=True)
+
+    sub = wide[["模5_總分數", "統測_總分數"]].dropna()
+    sample = sub.sample(min(50, len(sub)), random_state=42)
+    _ols = LinearRegression().fit(sub[["模5_總分數"]], sub["統測_總分數"])
+    a, b = float(_ols.coef_[0]), float(_ols.intercept_)
+
+    xs = np.linspace(sub["模5_總分數"].min(), sub["模5_總分數"].max(), 60)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=sample["模5_總分數"], y=sample["統測_總分數"],
+        mode="markers", marker=dict(color="#4b9eff", size=8, opacity=0.65),
+        name="實際資料",
+    ))
+    fig.add_trace(go.Scatter(
+        x=xs, y=a * xs + b, mode="lines",
+        line=dict(color="#22c55e", width=4),
+        name=f"OLS 最佳線 (a={a:.3f}, b={b:.1f})",
+    ))
+    for _, row in sample.iterrows():
+        x_, y_ = row["模5_總分數"], row["統測_總分數"]
+        fig.add_shape(type="line", x0=x_, y0=y_, x1=x_, y1=a * x_ + b,
+                      line=dict(color="rgba(255,80,80,0.55)", width=1.2, dash="dot"))
+    fig.update_layout(
+        font_size=15, height=420,
+        xaxis_title="模5總分 (x)", yaxis_title="統測總分 (y)",
+        legend=dict(yanchor="top", y=0.98, xanchor="left", x=0.02),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    sse = float(((sub["統測_總分數"] - (a * sub["模5_總分數"] + b)) ** 2).sum())
+    c1, c2, c3 = st.columns(3)
+    c1.metric("斜率 a", f"{a:.3f}")
+    c2.metric("截距 b", f"{b:.1f}")
+    c3.metric("Σ(殘差)² = SSE", f"{sse:,.0f}")
+    st.caption("紅色虛線 = 殘差（資料點到線的垂直距離）。OLS 找的 a, b 在所有可能組合中讓 Σ(殘差)² 最小。")
+
+    st.info("""
+**🤖 為什麼這跟 AI 有關？**
+
+你剛剛做的事，就是**機器學習最基礎的模型**——線性迴歸（Linear Regression）。
+最小平方法就是讓電腦「**自動找出最佳參數 a, b**」的方法。
+
+和現在那些動輒上千億參數的大語言模型（ChatGPT、Claude）核心邏輯相同：
+　　① 定義一個**誤差函數**（什麼算「錯」）
+　　② 想辦法把它**降到最低**（找最佳參數）
+
+你今天動筆算的這條線，就是 AI 一切的起點。
+""")
+
 
 # ── 活動 8：IT 老師 ────────────────────────────────────────────────
 
 def s16():  # 提問 + 初始散佈圖
     st.markdown('<span class="tag">活動 8 · 資訊老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">EDA 讓我們看見過去<br>但「預測」才是資訊最迷人的地方</h2>',
+    st.markdown('<h2 class="st">看得出規律——但要怎麼用一條線描述它？</h2>',
                 unsafe_allow_html=True)
     st.markdown("""
-<div class="big" style="margin-top:32px">
-問題：<b>能不能用前幾次模擬考的成績，預測你最終的統測分數？</b><br><br>
-先來看模考和統測的分布關係……
+<div class="big" style="margin-top:24px;line-height:1.8">
+我們已經知道：模考越高，統測也傾向越高（r ≈ 0.87，<b>強正相關</b>）。<br><br>
+但「相關係數」只是 −1 到 +1 的<b>一個數字</b>——
+能不能<b>畫一條線</b>，讓我們<b>輸入 x（模考）就能算出 y（統測）</b>？<br><br>
+先看看資料的分布——
 </div>""", unsafe_allow_html=True)
     sub = wide[["模5_總分數","統測_總分數"]].dropna()
     fig = px.scatter(sub, x="模5_總分數", y="統測_總分數", opacity=0.3,
@@ -1402,194 +1800,10 @@ def s16():  # 提問 + 初始散佈圖
                      color_discrete_sequence=["#4b9eff"])
     fig.update_layout(font_size=18, height=430)
     st.plotly_chart(fig, use_container_width=True)
-    st.caption("散佈圖：每個點是一位學長姐。是否有某種規律？")
-
-
-def s17():  # 相關係數互動
-    st.markdown('<span class="tag">活動 8 · 資訊老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">換不同模考，相關係數 r 怎麼變？</h2>', unsafe_allow_html=True)
-
-    exam = st.slider("選第幾次模擬考", 1, 5, 5, key="s17e")
-    x_col = f"模{exam}_總分數"
-    sub = wide[[x_col, "統測_總分數"]].dropna()
-    r = sub.corr().iloc[0, 1]
-    _ols = LinearRegression().fit(sub[[x_col]], sub["統測_總分數"])
-    xs = np.linspace(sub[x_col].min(), sub[x_col].max(), 60)
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("相關係數 r", f"{r:.3f}")
-    c2.metric("樣本數 n", f"{len(sub):,}")
-    c3.metric("斜率 a",  f"{float(_ols.coef_[0]):.3f}")
-    c4.metric("截距 b",  f"{float(_ols.intercept_):.1f}")
-
-    fig = px.scatter(sub, x=x_col, y="統測_總分數", opacity=0.25,
-                     labels={x_col: f"第{exam}次模考總分", "統測_總分數": "統測總分"})
-    fig.add_scatter(x=xs, y=_ols.coef_[0]*xs+_ols.intercept_,
-                    mode="lines", name="OLS 趨勢線",
-                    line=dict(color="#ff4b4b", width=4))
-    fig.update_layout(font_size=18, height=460)
-    st.plotly_chart(fig, use_container_width=True)
-    st.info(f"💡 從模1到模5，r 值通常會逐漸上升——離統測越近，預測越準確。")
-
-
-def s18():  # 預測實機
-    st.markdown('<span class="tag">活動 8 · 預測實機</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">丟入模考分數，預測統測落點</h2>', unsafe_allow_html=True)
-
-    exam = st.slider("選第幾次模擬考", 1, 5, 5, key="s18e")
-    x_col = f"模{exam}_總分數"
-    sub = wide[[x_col, "統測_總分數"]].dropna()
-    _ols = LinearRegression().fit(sub[[x_col]], sub["統測_總分數"])
-    m_ols, b_ols = float(_ols.coef_[0]), float(_ols.intercept_)
-
-    c_input, c_result = st.columns([1, 2])
-    with c_input:
-        st.markdown("#### 輸入假想學生的模考分數")
-        scores = {}
-        for label, default in [("同學甲", 250), ("同學乙", 320), ("同學丙", 400)]:
-            scores[label] = st.number_input(label, 0, 500, default, step=10, key=f"s18_{label}")
-
-    with c_result:
-        xs = np.linspace(sub[x_col].min(), sub[x_col].max(), 60)
-        fig = px.scatter(sub, x=x_col, y="統測_總分數", opacity=0.2,
-                         labels={x_col:f"第{exam}次模考總分","統測_總分數":"統測總分"})
-        fig.add_scatter(x=xs, y=m_ols*xs+b_ols, mode="lines",
-                        name="迴歸線", line=dict(color="#ff4b4b", width=3))
-        colors = ["#ffcc00","#4bff91","#4b9eff"]
-        for (label, sc), color in zip(scores.items(), colors):
-            pred = m_ols * sc + b_ols
-            fig.add_scatter(x=[sc], y=[pred], mode="markers+text",
-                            name=label,
-                            text=[f"{label}≈{pred:.0f}分"],
-                            textposition="top center",
-                            marker=dict(size=18, color=color, symbol="star"))
-        fig.update_layout(font_size=17, height=460)
-        st.plotly_chart(fig, use_container_width=True)
-
-    st.markdown(f"**迴歸方程式：統測總分 ≈ {m_ols:.2f} × 模{exam}總分 + {b_ols:.1f}**")
+    st.caption("👀 如果要用一條直線「貫穿」這群點，你會怎麼畫？下一頁我們來算出最佳的那條。")
 
 
 # ── 活動 9：數學老師 ───────────────────────────────────────────────
-
-def s19():  # y=ax+b 解說
-    st.markdown('<span class="tag">活動 9 · 數學老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">拆解黑盒子：那條線從哪裡來？</h2>', unsafe_allow_html=True)
-    c_eq, c_chart = st.columns([1, 2])
-    with c_eq:
-        st.markdown("""
-<div class="big">
-程式跑出的那條線就是：<br><br>
-<div style="font-size:42px;font-weight:bold;color:#ff4b4b;text-align:center;padding:20px 0">
-y = ax + b
-</div>
-<b>x</b> = 模考總分（輸入）<br>
-<b>y</b> = 統測總分（預測）<br>
-<b>a</b> = 斜率（每多 1 分模考<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;統測預期多幾分）<br>
-<b>b</b> = 截距（x=0 時的 y）<br><br>
-這就是你國中學過的<br><b>一次函數</b>！
-</div>""", unsafe_allow_html=True)
-    with c_chart:
-        sub = wide[["模5_總分數","統測_總分數"]].dropna()
-        _ols = LinearRegression().fit(sub[["模5_總分數"]], sub["統測_總分數"])
-        m, b = float(_ols.coef_[0]), float(_ols.intercept_)
-        xs = np.linspace(sub["模5_總分數"].min(), sub["模5_總分數"].max(), 60)
-        fig = px.scatter(sub, x="模5_總分數", y="統測_總分數", opacity=0.2,
-                         labels={"模5_總分數":"模考總分","統測_總分數":"統測總分"})
-        fig.add_scatter(x=xs, y=m*xs+b, mode="lines",
-                        name=f"y = {m:.2f}x + {b:.1f}",
-                        line=dict(color="#ff4b4b", width=4))
-        fig.update_layout(font_size=17, height=480, showlegend=True)
-        st.plotly_chart(fig, use_container_width=True)
-
-
-def s20():  # 你來畫迴歸線
-    st.markdown('<span class="tag">活動 9 · 互動挑戰</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">你來畫一條預測線試試看</h2>', unsafe_allow_html=True)
-    st.caption("拉兩個點決定一條直線，看看你的 SSE 能不能比 OLS 更小？")
-
-    exam = st.select_slider("選模考次數", options=list(range(1,6)), value=5, key="s20e")
-    x_col = f"模{exam}_總分數"
-    sub = wide[[x_col,"統測_總分數"]].dropna()
-    x_min, x_max = int(sub[x_col].min()), int(sub[x_col].max())
-    y_min, y_max = int(sub["統測_總分數"].min()), int(sub["統測_總分數"].max())
-
-    _ols = LinearRegression().fit(sub[[x_col]], sub["統測_總分數"])
-    m_ols, b_ols = float(_ols.coef_[0]), float(_ols.intercept_)
-    sse_ols = float(((sub["統測_總分數"] - _ols.predict(sub[[x_col]]))**2).sum())
-
-    c1, c2 = st.columns(2)
-    p1x = c1.slider("第 1 點 x（模考）", x_min, x_max, x_min+40, key="s20p1x")
-    p1y = c1.slider("第 1 點 y（統測）", y_min, y_max, y_min+40, key="s20p1y")
-    p2x = c2.slider("第 2 點 x", x_min, x_max, x_max-40, key="s20p2x")
-    p2y = c2.slider("第 2 點 y", x_min, y_max, y_max-40, key="s20p2y")
-
-    m_user = (p2y - p1y) / max(p2x - p1x, 1e-6)
-    b_user = p1y - m_user * p1x
-    sse_user = float(((sub["統測_總分數"] - (m_user*sub[x_col]+b_user))**2).sum())
-
-    m1, m2, m3 = st.columns(3)
-    m1.metric("你的線 SSE", f"{sse_user:,.0f}")
-    m2.metric("OLS 最佳解 SSE", f"{sse_ols:,.0f}")
-    delta = sse_user - sse_ols
-    m3.metric("你比 OLS 多了", f"{delta:,.0f}",
-              delta_color="inverse" if delta > 0 else "normal")
-
-    xs = np.linspace(x_min, x_max, 60)
-    fig = px.scatter(sub, x=x_col, y="統測_總分數", opacity=0.2,
-                     labels={x_col:f"模{exam}總分","統測_總分數":"統測總分"})
-    fig.add_scatter(x=xs, y=m_ols*xs+b_ols, mode="lines",
-                    name="OLS 最佳解", line=dict(color="#ff4b4b",width=3))
-    fig.add_scatter(x=xs, y=m_user*xs+b_user, mode="lines",
-                    name="你的線", line=dict(color="#ffcc00",width=3,dash="dash"))
-    fig.add_scatter(x=[p1x,p2x], y=[p1y,p2y], mode="markers",
-                    name="你拉的兩點", marker=dict(size=16,color="#ffcc00",symbol="x"))
-    fig.update_layout(font_size=17, height=420)
-    st.plotly_chart(fig, use_container_width=True)
-    st.info("💡 OLS 的 SSE 是所有可能直線中最小的——不管怎麼拉，你的 SSE 永遠 ≥ OLS。"
-            "這就是「最小平方法」名字的由來。")
-
-
-def s21():  # 殘差視覺化
-    st.markdown('<span class="tag">活動 9 · 數學老師</span>', unsafe_allow_html=True)
-    st.markdown('<h2 class="st">殘差（誤差）長什麼樣子？</h2>', unsafe_allow_html=True)
-    st.caption("每條紅線 = 真實值 − 預測值 = 殘差；SSE = 所有殘差² 的總和")
-
-    sub_full = wide[["模5_總分數","統測_總分數"]].dropna().reset_index(drop=True)
-    _ols = LinearRegression().fit(sub_full[["模5_總分數"]], sub_full["統測_總分數"])
-    sub_full["預測"] = _ols.predict(sub_full[["模5_總分數"]])
-    sub_full["殘差"] = sub_full["統測_總分數"] - sub_full["預測"]
-
-    n_show = st.slider("顯示幾個殘差線段（隨機抽樣）", 20, 200, 80, step=10, key="s21n")
-    sample = sub_full.sample(n_show, random_state=42)
-
-    xs = np.linspace(sub_full["模5_總分數"].min(), sub_full["模5_總分數"].max(), 60)
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=sub_full["模5_總分數"], y=sub_full["統測_總分數"],
-        mode="markers", opacity=0.15, name="實際資料",
-        marker=dict(color="#4b9eff", size=5)))
-    fig.add_trace(go.Scatter(
-        x=xs, y=_ols.coef_[0]*xs+_ols.intercept_,
-        mode="lines", name="OLS 迴歸線",
-        line=dict(color="#ff4b4b", width=3)))
-    # 殘差線段
-    for _, row in sample.iterrows():
-        fig.add_shape(type="line",
-                      x0=row["模5_總分數"], y0=row["預測"],
-                      x1=row["模5_總分數"], y1=row["統測_總分數"],
-                      line=dict(color="rgba(255,200,0,0.6)", width=1.5))
-    fig.update_layout(font_size=17, height=500,
-                      xaxis_title="模5總分", yaxis_title="統測總分",
-                      showlegend=True)
-    st.plotly_chart(fig, use_container_width=True)
-
-    sse = float((sub_full["殘差"]**2).sum())
-    rmse = float((sub_full["殘差"]**2).mean()**0.5)
-    c1, c2, c3 = st.columns(3)
-    c1.metric("SSE（殘差平方和）", f"{sse:,.0f}")
-    c2.metric("RMSE（均方根誤差）", f"{rmse:.1f} 分")
-    c3.metric("平均誤差方向", f"{'正偏' if sub_full['殘差'].mean()>0 else '負偏'} {abs(sub_full['殘差'].mean()):.1f} 分")
-
 
 _W_PAT  = re.compile(r"(國文|英文|數學|專業\(一\)|專業\(二\))\*(\d+\.?\d*)")
 _W_KEY  = {"國文":"國文","英文":"英文","數學":"數學","專業(一)":"專一","專業(二)":"專二"}
@@ -1637,8 +1851,11 @@ def s21b():  # 科目分數 → 加權落點
         st.markdown("##### 查詢條件")
         cat    = st.radio("科系分類", ["商管類","資訊類","語文類","設計類"],
                           key="s21b_cat")
-        year   = st.selectbox("查哪年門檻", [114, 113, 112], key="s21b_yr")
-        margin = st.slider("門檻 ± 分差", 10, 80, 30, step=5, key="s21b_mg")
+        margin = st.slider("門檻 ± 平均分差", 1, 15, 5, step=1, key="s21b_mg",
+                            help="以加權平均（0–100）為單位，跨年/跨校公平比較")
+        query  = st.text_input("🔍 搜尋學校或科系（可空白）",
+                                placeholder="如：政大、會計、資訊管理",
+                                key="s21b_q").strip()
 
         st.markdown("---")
         st.markdown("""
@@ -1651,10 +1868,6 @@ def s21b():  # 科目分數 → 加權落點
 
     with c_out:
         thresh = load_thresholds()
-        th_sub = thresh[
-            (thresh["年度"] == year) &
-            (thresh["科系分類"] == cat)
-        ].copy()
 
         def row_w(row):
             try:
@@ -1662,34 +1875,131 @@ def s21b():  # 科目分數 → 加權落點
             except Exception:
                 return None
 
-        th_sub["你的加權分"] = th_sub.apply(row_w, axis=1)
-        th_sub["分差"] = (th_sub["錄取總分數"] - th_sub["你的加權分"]).round(1)
-        th_sub["最高可能分"] = th_sub["各科目加權"].apply(
-            lambda f: round(sum(_parse_w(f).values()) * 100)
-            if pd.notna(f) else None
+        # 預先把整個 cat 三年資料都算好，用來判定「114 可以但 113/112 不行」
+        cat_data = thresh[thresh["科系分類"] == cat].copy()
+        cat_data["你的加權分"] = cat_data.apply(row_w, axis=1)
+        cat_data["分差"] = (cat_data["錄取總分數"] - cat_data["你的加權分"]).round(1)
+
+        # 加權平均（0–100）：除以倍率合，跨年跨校才能公平比
+        cat_data["倍率合"] = cat_data["各科目加權"].apply(
+            lambda f: sum(_parse_w(f).values()) if pd.notna(f) else None
         )
+        cat_data["你的加權平均"] = (cat_data["你的加權分"] / cat_data["倍率合"]).round(1)
+        cat_data["門檻平均"]    = (cat_data["錄取總分數"] / cat_data["倍率合"]).round(1)
+        cat_data["平均分差"]    = (cat_data["門檻平均"] - cat_data["你的加權平均"]).round(1)
 
-        hit = th_sub[th_sub["分差"].abs() <= margin].dropna(subset=["你的加權分"])
-        hit_sorted = hit.sort_values("分差", key=abs)
+        def _fmt_w(formula):
+            """『國文*1+英文*1.5+專業(一)*2』→『國×1 英×1.5 專一×2』。"""
+            if pd.isna(formula):
+                return ""
+            short = {"國文":"國","英文":"英","數學":"數","專一":"專一","專二":"專二"}
+            ws = _parse_w(formula)
+            return " ".join(f"{short.get(k, k)}×{v:g}" for k, v in ws.items())
 
-        if hit_sorted.empty:
-            st.warning(f"± {margin} 分差內無符合的 {year} 年 {cat} 志願。")
-        else:
-            st.caption(f"{year} 年 {cat}｜± {margin} 分｜共 **{len(hit_sorted)}** 筆")
-            show_cols = [c for c in ["學校名稱","系科組學程名稱","學校類型",
-                                      "你的加權分","錄取總分數","分差","最高可能分"]
-                         if c in hit_sorted.columns]
-            st.dataframe(hit_sorted[show_cols].head(20),
-                         hide_index=True, height=430)
-        st.caption("分差 > 0 表示門檻比你高（差多少分才夠）；< 0 表示你超過門檻。")
+        cat_data["加權倍率"] = cat_data["各科目加權"].apply(_fmt_w)
+        diff_by_year = {
+            yr: dict(zip(
+                zip(cat_data.loc[cat_data["年度"] == yr, "學校名稱"],
+                    cat_data.loc[cat_data["年度"] == yr, "系科組學程名稱"]),
+                cat_data.loc[cat_data["年度"] == yr, "平均分差"]
+            ))
+            for yr in [114, 113, 112]
+        }
+
+        def is_new_chance(school, system):
+            """114 你的加權平均 ≥ 門檻，但 113 或 112 不到。"""
+            d114 = diff_by_year[114].get((school, system))
+            if d114 is None or pd.isna(d114) or d114 > 0:
+                return False
+            d113 = diff_by_year[113].get((school, system))
+            d112 = diff_by_year[112].get((school, system))
+            fail113 = d113 is not None and not pd.isna(d113) and d113 > 0
+            fail112 = d112 is not None and not pd.isna(d112) and d112 > 0
+            return fail113 or fail112
+
+        # 先把所有「114 過、113 或 112 不過」的 (學校, 系科) 撈出來
+        keys_special = {
+            (row["學校名稱"], row["系科組學程名稱"])
+            for _, row in cat_data[cat_data["年度"] == 114].iterrows()
+            if is_new_chance(row["學校名稱"], row["系科組學程名稱"])
+        }
+
+        year_tabs = st.tabs(["📍 114 學年度", "📅 113 學年度", "📅 112 學年度"])
+        for tab, yr in zip(year_tabs, [114, 113, 112]):
+            with tab:
+                th_sub = cat_data[cat_data["年度"] == yr].copy()
+                hit = th_sub[th_sub["平均分差"].abs() <= margin].dropna(subset=["你的加權平均"])
+
+                # 113/112：把跨年「新機會」對應列強制納入（即使超出 margin），讓紅底顯示
+                if yr != 114 and keys_special:
+                    mask_special = th_sub.apply(
+                        lambda r: (r["學校名稱"], r["系科組學程名稱"]) in keys_special, axis=1
+                    )
+                    extra = th_sub[mask_special & ~th_sub.index.isin(hit.index)]
+                    hit = pd.concat([hit, extra])
+
+                # 搜尋字串過濾（學校名 + 系科組合搜）
+                if query:
+                    q_mask = (
+                        hit["學校名稱"].str.contains(query, case=False, na=False)
+                        | hit["系科組學程名稱"].str.contains(query, case=False, na=False)
+                    )
+                    hit = hit[q_mask]
+
+                hit_sorted = hit.sort_values("平均分差", key=abs)
+
+                if hit_sorted.empty:
+                    msg = f"± {margin} 平均分差內無符合的 {yr} 年 {cat} 志願。"
+                    if query:
+                        msg = f"關鍵字「{query}」在 {yr} 年 {cat} 無命中。"
+                    st.warning(msg)
+                    continue
+
+                hint = f"｜搜尋：「{query}」" if query else ""
+                st.caption(f"{yr} 年 {cat}｜± {margin} 平均分差{hint}｜共 **{len(hit_sorted)}** 筆")
+                show_cols = [c for c in ["學校名稱","系科組學程名稱","學校類型",
+                                          "加權倍率",
+                                          "你的加權平均","門檻平均","平均分差",
+                                          "你的加權分","錄取總分數"]
+                             if c in hit_sorted.columns]
+                display = hit_sorted[show_cols].head(20)
+
+                bg_color = "#fff3a0" if yr == 114 else "#ffc9c9"
+                def _hl(row, _keys=keys_special, _bg=bg_color):
+                    if (row["學校名稱"], row["系科組學程名稱"]) in _keys:
+                        return [f"background-color: {_bg}; color: #222"] * len(row)
+                    return [""] * len(row)
+
+                shown_special = sum(
+                    (s, p) in keys_special
+                    for s, p in zip(display["學校名稱"], display["系科組學程名稱"])
+                )
+                styler = display.style.apply(_hl, axis=1).hide(axis="index")
+                st.dataframe(styler, height=400, use_container_width=True)
+
+                if shown_special > 0:
+                    if yr == 114:
+                        st.caption(
+                            f"🟡 淡黃色 = **{shown_special}** 筆「今年才上得了」的志願："
+                            "114 你過了，但同系所在 113 或 112 的門檻你不到。"
+                        )
+                    else:
+                        st.caption(
+                            f"🔴 紅底 = **{shown_special}** 筆同系所「{yr} 年你不到、114 才過」的對照——"
+                            "顯示這幾年門檻或加權變化的影響。"
+                        )
+        st.caption(
+            "**平均分差** = 門檻平均 − 你的加權平均（0–100 同一尺度，跨年/跨校公平比較）。"
+            "> 0 = 你還差幾分；< 0 = 你已超過門檻。"
+        )
 
 
 def s21c():  # 推甄 vs 分發
-    from data_loader import load_thresholds
+    from data_loader import load_thresholds, load_tuijian_stats, load_tuijian_jifen_stats
     st.markdown('<span class="tag">活動 9 · 數學老師</span>', unsafe_allow_html=True)
     st.markdown('<h2 class="st">推甄 vs 分發：誰能上更好的學校？</h2>',
                 unsafe_allow_html=True)
-    st.caption("分發：你的加權分 ≥ 門檻才能錄取　｜　推甄：分數低於門檻也有機會——靠學業成績、備審、面試")
+    st.caption("分發：你的加權分 ≥ 門檻才能錄取　｜　推甄：看『統測總級分』通過一階，再看備審、面試")
 
     c_score, c_out = st.columns([1, 3])
 
@@ -1707,137 +2017,141 @@ def s21c():  # 推甄 vs 分發
             scores[sname] = st.number_input(sname, 0, 100,
                                              value=DEFS[sname], step=1,
                                              key=f"s21c_{sname}")
+        my_jifen = st.number_input("你預估的統測總級分（0–75）", 0, 75,
+                                    value=50, step=1, key="s21c_jf",
+                                    help="推甄一階看的就是這個，每科 0–15 級分，五科加總")
         cat  = st.radio("科系分類", ["商管類","資訊類","語文類","設計類"], key="s21c_cat")
-        year = st.selectbox("查哪年門檻", [114, 113, 112], key="s21c_yr")
         margin_rec = st.slider("推甄機會範圍（門檻超過你幾分以內）",
                                10, 100, 50, step=10, key="s21c_mg")
 
+    thresh   = load_thresholds()
+    tj_stats = load_tuijian_stats()
+    jf_stats = load_tuijian_jifen_stats()
+
+    def _row_w(row):
+        try:
+            return round(_calc_w(scores, _parse_w(row["各科目加權"])), 2)
+        except Exception:
+            return None
+
+    def _classify(diff):
+        if diff <= 0:
+            return "分發可上 ✅"
+        elif diff <= margin_rec:
+            return "推甄機會 🎯"
+        return "差距較大"
+
     with c_out:
-        thresh = load_thresholds()
-        th_sub = thresh[(thresh["年度"] == year) & (thresh["科系分類"] == cat)].copy()
+        year_tabs = st.tabs(["📍 114 學年度", "📅 113 學年度", "📅 112 學年度"])
+        for tab, year in zip(year_tabs, [114, 113, 112]):
+            with tab:
+                th_sub = thresh[(thresh["年度"] == year) & (thresh["科系分類"] == cat)].copy()
+                th_sub["你的加權分"] = th_sub.apply(_row_w, axis=1)
+                th_sub = th_sub.dropna(subset=["你的加權分"])
+                th_sub["分差"] = (th_sub["錄取總分數"] - th_sub["你的加權分"]).round(1)
+                th_sub["情境"] = th_sub["分差"].apply(_classify)
 
-        def row_w(row):
-            try:
-                return round(_calc_w(scores, _parse_w(row["各科目加權"])), 2)
-            except Exception:
-                return None
+                n_dist  = (th_sub["情境"] == "分發可上 ✅").sum()
+                n_rec   = (th_sub["情境"] == "推甄機會 🎯").sum()
+                dist_best = th_sub.loc[th_sub["情境"]=="分發可上 ✅","錄取總分數"].max() if n_dist else 0
+                rec_best  = th_sub.loc[th_sub["情境"]=="推甄機會 🎯","錄取總分數"].max() if n_rec  else 0
 
-        th_sub["你的加權分"] = th_sub.apply(row_w, axis=1)
-        th_sub = th_sub.dropna(subset=["你的加權分"])
-        th_sub["分差"] = (th_sub["錄取總分數"] - th_sub["你的加權分"]).round(1)
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("分發可上 志願數", n_dist)
+                m2.metric("推甄機會 志願數", n_rec)
+                m3.metric("分發最高門檻", f"{dist_best:.0f}" if dist_best else "—")
+                m4.metric("推甄可挑戰最高", f"{rec_best:.0f}" if rec_best else "—",
+                          delta=f"+{rec_best-dist_best:.0f}" if rec_best > dist_best else None)
 
-        # 分類
-        def classify(diff):
-            if diff <= 0:
-                return "分發可上 ✅"
-            elif diff <= margin_rec:
-                return "推甄機會 🎯"
-            else:
-                return "差距較大"
-        th_sub["情境"] = th_sub["分差"].apply(classify)
+                # 推甄機會名單 + 加權分 + 級分
+                df_rec_schools = th_sub[th_sub["情境"]=="推甄機會 🎯"][
+                    ["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]
+                ].copy()
 
-        n_dist  = (th_sub["情境"] == "分發可上 ✅").sum()
-        n_rec   = (th_sub["情境"] == "推甄機會 🎯").sum()
-        dist_best = th_sub.loc[th_sub["情境"]=="分發可上 ✅","錄取總分數"].max() if n_dist else 0
-        rec_best  = th_sub.loc[th_sub["情境"]=="推甄機會 🎯","錄取總分數"].max() if n_rec  else 0
-
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("分發可上 志願數", n_dist)
-        m2.metric("推甄機會 志願數", n_rec)
-        m3.metric("分發最高門檻", f"{dist_best:.0f}" if dist_best else "—")
-        m4.metric("推甄可挑戰最高", f"{rec_best:.0f}" if rec_best else "—",
-                  delta=f"+{rec_best-dist_best:.0f}" if rec_best > dist_best else None)
-
-        # 視覺化：水平點圖，學校依門檻排序
-        plot_df = th_sub[th_sub["情境"] != "差距較大"].copy()
-        plot_df = plot_df.nlargest(50, "錄取總分數")
-        plot_df["學校科系"] = (plot_df["學校名稱"].str[:8] + " " +
-                              plot_df["系科組學程名稱"].str[:6])
-        color_map = {"分發可上 ✅": "#4bff91", "推甄機會 🎯": "#ffcc00"}
-        fig = px.scatter(
-            plot_df.sort_values("錄取總分數"),
-            x="錄取總分數", y="學校科系",
-            color="情境", color_discrete_map=color_map,
-            hover_data=["你的加權分","分差"],
-            labels={"錄取總分數": "錄取加權門檻", "學校科系": ""},
-        )
-        fig.update_traces(marker_size=14)
-        fig.update_layout(
-            font_size=13,
-            height=max(380, len(plot_df) * 22 + 80),
-            legend=dict(orientation="h", y=1.03),
-            margin=dict(l=0, r=20, t=40, b=20),
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        if rec_best > dist_best:
-            st.success(
-                f"💡 推甄可以挑戰比分發上限高 **{rec_best-dist_best:.0f} 分** 的學校！"
-                f"（分發上限 {dist_best:.0f}，推甄可挑戰 {rec_best:.0f}）")
-        elif n_dist > 0:
-            st.info("你的分數已能分發進不錯的學校，推甄還可挑戰競爭更激烈的科系。")
-
-        tab_dist, tab_rec, tab_evidence = st.tabs(
-            ["✅ 分發可上（加權分 ≥ 門檻）",
-             f"🎯 推甄機會（門檻比你高 1–{margin_rec} 分）",
-             "📋 推測依據（學長姐真實紀錄）"])
-        with tab_dist:
-            df_d = th_sub[th_sub["情境"]=="分發可上 ✅"].sort_values(
-                "錄取總分數", ascending=False)
-            st.dataframe(
-                df_d[["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]].head(15),
-                hide_index=True, height=300)
-        with tab_rec:
-            df_r = th_sub[th_sub["情境"]=="推甄機會 🎯"].sort_values(
-                "錄取總分數", ascending=False)
-            st.dataframe(
-                df_r[["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]].head(15),
-                hide_index=True, height=300)
-        with tab_evidence:
-            from data_loader import load_tuijian_stats
-            tj_stats = load_tuijian_stats()
-
-            # 推甄機會名單
-            df_rec_schools = th_sub[th_sub["情境"]=="推甄機會 🎯"][
-                ["學校名稱","系科組學程名稱","學校類型","你的加權分","錄取總分數","分差"]
-            ].copy()
-
-            # 彙整同一學校的推甄統計（跨科系加總人數，取最低/平均分）
-            tj_year = tj_stats[tj_stats["年度"] == year]
-            school_agg = (
-                tj_year.groupby("學校名稱")
-                .agg(
-                    推甄人數=("推甄人數", "sum"),
-                    推甄最低加權分=("推甄最低加權分", "min"),
-                    推甄平均加權分=("推甄平均加權分", "mean"),
+                tj_year = tj_stats[tj_stats["年度"] == year]
+                school_agg = (
+                    tj_year.groupby("學校名稱")
+                    .agg(
+                        推甄人數=("推甄人數", "sum"),
+                        推甄最低加權分=("推甄最低加權分", "min"),
+                        推甄平均加權分=("推甄平均加權分", "mean"),
+                    )
+                    .reset_index()
                 )
-                .reset_index()
-            )
-            school_agg["推甄平均加權分"] = school_agg["推甄平均加權分"].round(1)
-            school_agg["推甄最低加權分"] = school_agg["推甄最低加權分"].round(1)
+                school_agg["推甄平均加權分"] = school_agg["推甄平均加權分"].round(1)
+                school_agg["推甄最低加權分"] = school_agg["推甄最低加權分"].round(1)
 
-            evidence = df_rec_schools.merge(school_agg, on="學校名稱", how="left")
-            evidence["推甄人數"] = evidence["推甄人數"].fillna(0).astype(int)
-            evidence = evidence.sort_values(
-                ["推甄人數","錄取總分數"], ascending=[False, False])
+                jf_year = jf_stats[jf_stats["年度"] == year]
+                jf_school_agg = (
+                    jf_year.groupby("學校名稱")
+                    .agg(
+                        推甄最低總級分=("推甄最低總級分", "min"),
+                        推甄平均總級分=("推甄平均總級分", "mean"),
+                    )
+                    .reset_index()
+                )
+                jf_school_agg["推甄平均總級分"] = jf_school_agg["推甄平均總級分"].round(1)
 
-            n_with = (evidence["推甄人數"] > 0).sum()
-            st.caption(
-                f"{year} 年推甄機會學校中，**{n_with}** 間有本校學長姐推甄錄取紀錄。"
-                "分數為學長姐的**加權統測分**（與門檻同單位），人數 < 2 不顯示分數。")
-            st.dataframe(
-                evidence[["學校名稱","系科組學程名稱","學校類型",
-                           "你的加權分","錄取總分數","分差",
-                           "推甄人數","推甄最低加權分","推甄平均加權分"]].head(20),
-                hide_index=True, height=400,
-                column_config={
-                    "推甄最低加權分": st.column_config.NumberColumn("推甄最低加權分", format="%.1f"),
-                    "推甄平均加權分": st.column_config.NumberColumn("推甄平均加權分", format="%.1f"),
-                    "你的加權分":     st.column_config.NumberColumn("你的加權分",     format="%.1f"),
-                }
-            )
-            st.caption("⚠️ 人數 0 = 本校三屆無紀錄，不代表不可能。"
-                       "加權公式以該校最常見公式估算；推甄仍需備審、面試等條件。")
+                evidence = df_rec_schools.merge(school_agg, on="學校名稱", how="left")
+                evidence = evidence.merge(jf_school_agg, on="學校名稱", how="left")
+                evidence["推甄人數"] = evidence["推甄人數"].fillna(0).astype(int)
+                evidence["你的級分vs最低"] = (my_jifen - evidence["推甄最低總級分"]).round(1)
+
+                # 推甄可上 (你的級分 ≥ 推甄最低總級分) AND 分發不到 (分差 > 0)
+                evidence["_yellow"] = (
+                    evidence["推甄最低總級分"].notna() &
+                    (my_jifen >= evidence["推甄最低總級分"]) &
+                    (evidence["分差"] > 0)
+                )
+                # 黃底列優先排前面，其次推甄人數多、門檻高
+                evidence = evidence.sort_values(
+                    ["_yellow","推甄人數","錄取總分數"],
+                    ascending=[False, False, False])
+
+                n_with   = (evidence["推甄人數"] > 0).sum()
+                n_yellow = int(evidence["_yellow"].sum())
+                msg = (
+                    f"{year} 年｜推甄機會 **{n_rec}** 間，其中 **{n_with}** 間有學長姐推甄錄取紀錄。"
+                )
+                if n_yellow:
+                    msg += (
+                        f"　🟡 **{n_yellow}** 間：你的 **{my_jifen}** 級分 ≥ 學長姐推甄最低，"
+                        "但分發加權分還不到門檻——這就是「推甄翻身」的機會。"
+                    )
+                else:
+                    msg += "　🟡 黃底＝推甄可上但分發不到的學校；目前無此類紀錄。"
+                st.caption(msg)
+
+                show_cols = ["學校名稱","系科組學程名稱","學校類型",
+                             "你的加權分","錄取總分數","分差",
+                             "推甄人數",
+                             "推甄最低總級分","推甄平均總級分","你的級分vs最低",
+                             "推甄最低加權分","推甄平均加權分"]
+                display = evidence[show_cols + ["_yellow"]].head(20).reset_index(drop=True)
+
+                def _hl(row):
+                    if row["_yellow"]:
+                        return ["background-color: #fff3a0; color: #222"] * len(row)
+                    return [""] * len(row)
+
+                styled = (display.style
+                          .apply(_hl, axis=1)
+                          .format({
+                              "推甄最低總級分": "{:.0f}",
+                              "推甄平均總級分": "{:.1f}",
+                              "你的級分vs最低": "{:+.0f}",
+                              "推甄最低加權分": "{:.1f}",
+                              "推甄平均加權分": "{:.1f}",
+                              "你的加權分":     "{:.1f}",
+                              "錄取總分數":     "{:.0f}",
+                              "分差":           "{:.1f}",
+                          }, na_rep="—")
+                          .hide(axis="index")
+                          .hide(["_yellow"], axis="columns"))
+                st.dataframe(styled, height=420, use_container_width=True)
+
+        st.caption("⚠️ 人數 0 = 本校三屆無紀錄，不代表不可能。"
+                   "加權公式以該校最常見公式估算；推甄仍需備審、面試等條件。")
 
 
 def s22():  # 總結：打破預測
@@ -1857,9 +2171,9 @@ def s22():  # 總結：打破預測
 # ═══════════════════════════════════════════════════════════════════
 SLIDE_FUNCS = [
     s0, s1, s2, s3, s4, s5, s6, s_pay, s6b,              # 0–8
-    s10, s11, s11b, s13, s12, s14,                       # 9–14（原第三階段：圖表教學）
-    s7, s8a, s8b, s9,                                    # 15–18（原第二階段：相關介紹）
-    s15, s15b, s16, s17, s18, s19, s20, s21, s21b, s21c, s22,  # 19–29
+    s10, s11, s11c, s11b, s13, s12, s14,                 # 9–15（原第三階段：圖表教學）
+    s7, s8a, s8b, s8c, s9,                               # 16–20（原第二階段：相關介紹）
+    s15, s16, s15b, s15c, s21b, s21c, s22,               # 21–27
 ]
 N = len(SLIDE_FUNCS)
 

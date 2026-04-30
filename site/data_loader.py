@@ -93,3 +93,31 @@ def load_tuijian_stats() -> pd.DataFrame:
     stats["推甄最低加權分"] = stats["推甄最低加權分"].round(1)
     stats["推甄平均加權分"] = stats["推甄平均加權分"].round(1)
     return stats
+
+
+@st.cache_data
+def load_tuijian_jifen_stats() -> pd.DataFrame:
+    """推甄錄取學生的『統測總級分』統計，按 學校×科系分類 彙整。
+    至少 2 人才顯示分數，避免個資還原。
+    """
+    app  = pd.read_csv(DATA_DIR / "04_applications.csv")
+    wide = pd.read_csv(DATA_DIR / "01_wide_scores.csv", dtype={"班級_標準": str})
+
+    accepted = app[app["是否最終錄取"] == True][
+        ["student_id","畢業年度","志願學校","志願科系分類"]
+    ]
+    merged = accepted.merge(
+        wide[["student_id","畢業年度","統測_總分級分"]],
+        on=["student_id","畢業年度"], how="inner",
+    ).dropna(subset=["統測_總分級分"])
+
+    stats = (
+        merged.groupby(["畢業年度","志願學校","志願科系分類"])["統測_總分級分"]
+        .agg(推甄人數="count", 推甄最低總級分="min", 推甄平均總級分="mean")
+        .reset_index()
+        .rename(columns={"畢業年度":"年度","志願學校":"學校名稱","志願科系分類":"科系分類"})
+    )
+    mask = stats["推甄人數"] < 2
+    stats.loc[mask, ["推甄最低總級分","推甄平均總級分"]] = None
+    stats["推甄平均總級分"] = stats["推甄平均總級分"].round(1)
+    return stats
