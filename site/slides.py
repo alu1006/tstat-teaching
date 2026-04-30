@@ -330,7 +330,7 @@ def s2():  # 原始資料
     c_link1, c_link2, _ = st.columns([1, 1, 4])
     c_link1.link_button(
         "🚀 開啟 Colab 練習",
-        "https://colab.research.google.com/drive/1m2zAE-32IIswHGdXp0K5lzipQXUkYE7w?usp=sharing",
+        "https://colab.research.google.com/drive/1dn7WgORYXipo0e5t8oYp1TSWA9vSYDe4#scrollTo=rFFw75NmiObd",
         use_container_width=True,
     )
     c_link2.link_button(
