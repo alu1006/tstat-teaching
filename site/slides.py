@@ -122,6 +122,7 @@ SLIDES_META = [
     ("④", "迴歸直線怎麼算？",   ""),
     ("④", "最小平方法 (OLS)",    ""),
     ("④", "模考→統測→落點",      ""),
+    ("④", "落點之後·個人反思",   ""),
     ("④", "推甄 vs 分發",        ""),
     ("④", "總結：打破預測",      ""),
 ]
@@ -453,6 +454,23 @@ def s4():  # 揭曉長條圖
         fig.update_layout(font_size=18, height=500, showlegend=False, yaxis_range=[0, 115])
         st.plotly_chart(fig, use_container_width=True)
 
+    with st.expander("✨ 在 Colab 中直接問 AI ✨", expanded=False):
+        st.markdown(
+            "**情境**：我有一個 pandas DataFrame `df`,裡面有統測五科分數欄位。\n\n"
+            "**請幫我**:算出每一科的平均分數,由低到高排序,並畫成長條圖。"
+        )
+        st.code(
+            '我有一個 pandas DataFrame 叫 df,欄位包含:\n'
+            '"統測_國文分數"、"統測_英文分數"、"統測_數學B分數"、\n'
+            '"統測_專一分數"、"統測_專二分數"。\n\n'
+            '請幫我用 Python 做兩件事:\n'
+            '1. 算出這五個科目的平均分數,由低到高排序,印出來。\n'
+            '2. 用 plotly 把結果畫成長條圖,x 軸是科目、y 軸是平均分數,\n'
+            '   每根長條上方顯示數值。',
+            language="text",
+        )
+        st.caption("💡 小技巧:在 Colab 儲存格按 ✨ 圖示就能直接問 Gemini,把欄位名稱、圖表種類、輸出格式講清楚,AI 一次就給對答案。")
+
 
 def s5():  # 陷阱題
     _persist_voter_state()
@@ -666,6 +684,7 @@ def s_pay():  # 薪資中位數 vs 平均數小組討論
 
 
 def s6b():  # 統測例題：出生人數中位數
+    _persist_voter_state()
     st.markdown('<span class="tag">活動 2 · 例題演練</span>', unsafe_allow_html=True)
     st.markdown('<h2 class="st">統測例題：出生人數的中位數</h2>', unsafe_allow_html=True)
     st.caption("從國家發展委員會人口推估查詢系統可查詢到出生人數折線圖如下，根據圖表，判斷下列選項何者**錯誤**？")
@@ -718,34 +737,45 @@ def s6b():  # 統測例題：出生人數中位數
 <b>(D)</b> 2017 年到 2025 年，每一年的出生人數逐年減少
 </div>""", unsafe_allow_html=True)
 
+    QKEY = "exam_birth_median"
+    options = ["A", "B", "C", "D"]
+    counts = gsheet.get_votes(QKEY, options)
+    online = gsheet.is_connected()
+
+    group, sid, name = _voter_inputs("s6b")
+    voted = bool(sid) and gsheet.has_voted(QKEY, sid)
+    can_vote = bool(group.strip()) and bool(sid.strip()) and bool(name.strip()) and not voted
+
+    if voted:
+        st.warning(f"⚠️ 學號 {sid} 已經投過票了，每人只能投一次")
+    elif not can_vote:
+        st.info("👆 請先填好 第幾組／學號／姓名 才能投票")
+
     cols = st.columns(4)
-    for i, opt in enumerate(["A", "B", "C", "D"]):
-        if cols[i].button(f"選 {opt}", key=f"s6b_{opt}", use_container_width=True):
-            st.session_state.s6b_pick = opt
+    for i, opt in enumerate(options):
+        n = counts.get(opt, 0)
+        if cols[i].button(
+            f"選 {opt}　　{n} 人",
+            key=f"v6b_{opt}",
+            use_container_width=True,
+            disabled=not can_vote,
+        ):
+            ok, msg = gsheet.add_vote(QKEY, opt, group=group, student_id=sid, name=name)
+            if ok:
+                st.toast(f"✅ {name} 投了「{opt}」")
+            else:
+                st.error(msg)
+            st.rerun()
 
-    if "s6b_pick" in st.session_state:
-        pick = st.session_state.s6b_pick
-        if pick == "C":
-            st.success("✅ 答對了！正確答案是 (C)")
-        else:
-            st.error(f"❌ 你選的是 ({pick})，再想想……")
-
-    if st.button("🔍 揭曉解析", key="s6b_reveal"):
-        st.session_state.s6b_show = True
-
-    if st.session_state.get("s6b_show"):
-        years_2008_2016 = list(range(2008, 2017))
-        vals = sorted(birth_new[y] for y in years_2008_2016)
-        median_correct = vals[len(vals)//2]
-        st.markdown(f"""
-<div style="background:#fff8e1;color:#222;padding:20px;border-radius:10px;margin-top:8px;border-left:6px solid #ff9800;font-size:18px;line-height:1.8">
-<b style="color:#d84315;font-size:22px">解析（答案 C 錯誤）</b><br><br>
-2008–2016 共 9 個數字，由小到大排序：<br>
-<code style="background:#fff;color:#1b5e20;padding:6px 10px;border-radius:6px;display:inline-block;margin:6px 0">{', '.join(f'{v:,}' for v in vals)}</code><br><br>
-取第 5 個（最中間的）即為中位數 = <span style="color:#d32f2f;font-weight:bold;font-size:30px">{median_correct:,}</span>　（≠ 229,481）<br><br>
-題目給的 <b>229,481</b> 其實是<b>最大值</b>，不是中位數！<br><br>
-👉 這就是為什麼上一頁要強調：<b>平均、中位數、最大值是三件不同的事</b>。
-</div>""", unsafe_allow_html=True)
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet（fallback：本機 session）"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 def s7():  # 第三階段：相關介紹引言
@@ -874,8 +904,8 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
     r     = sub[["統測_國文分數","統測_數學B分數"]].corr().iloc[0, 1]
     n     = len(sub)
 
-    tab_f, tab_viz, tab_calc, tab_reveal = st.tabs(
-        ["📐 公式", "🎨 圖解（四象限）", "🔢 代入計算（國文 vs 數學）", "✅ 揭曉趨勢線"]
+    tab_f, tab_viz, tab_sd, tab_calc, tab_reveal = st.tabs(
+        ["📐 公式", "🎨 圖解（四象限）", "📏 算標準差", "🔢 代入計算（國文 vs 數學）", "✅ 揭曉趨勢線"]
     )
 
     with tab_f:
@@ -949,6 +979,115 @@ def s8b():  # 教學：r 公式 + 計算 + 揭曉
         st.caption(
             "📌 r 的正負完全由分子決定：把所有 (xi−x̄)(yi−ȳ) 加總；"
             "分母 (n−1)·sx·sy 只是把它縮放到 [−1, +1]。"
+        )
+
+    with tab_sd:
+        st.markdown("#### 標準差是「每個點到平均的距離」的綜合度量")
+        st.caption(
+            "和上一頁同一張四象限圖。每位學生離平均線的『水平距離』就是 (xi − x̄)、"
+            "『垂直距離』就是 (yi − ȳ)。把這些距離平方後加總平均再開根號,"
+            "就是 sx 和 sy。距離大 → 分布散;距離小 → 分布集中。"
+        )
+        st.latex(r"s_x = \sqrt{\frac{1}{n-1}\sum (x_i - \bar{x})^2}\qquad "
+                 r"s_y = \sqrt{\frac{1}{n-1}\sum (y_i - \bar{y})^2}")
+
+        c_o1, c_o2, c_o3, c_o4 = st.columns([3, 2, 2, 1.2])
+        which = c_o1.radio("顯示哪個方向的距離?",
+                           ["兩個都顯示", "只看 x 距離 (sx)", "只看 y 距離 (sy)"],
+                           horizontal=True, key="s8b_sd_which")
+        show_sd_box = c_o2.checkbox("顯示 ±1σ 區塊 (黃色)", value=True, key="s8b_sd_box")
+        sd_n = c_o3.slider("顯示人數", 30, len(sub), 80, step=10, key="s8b_sd_n")
+        if "s8b_sd_seed" not in st.session_state:
+            st.session_state.s8b_sd_seed = 2
+        if c_o4.button("🎲 換一批", key="s8b_sd_reroll", use_container_width=True):
+            st.session_state.s8b_sd_seed += 1
+
+        sd_sample = sub.sample(int(sd_n), random_state=st.session_state.s8b_sd_seed).copy()
+        sd_sample["dx"] = sd_sample["統測_國文分數"] - x_bar
+        sd_sample["dy"] = sd_sample["統測_數學B分數"] - y_bar
+
+        fig_sd = go.Figure()
+        # 散點(灰色,凸顯距離線)
+        fig_sd.add_trace(go.Scatter(
+            x=sd_sample["統測_國文分數"], y=sd_sample["統測_數學B分數"],
+            mode="markers",
+            marker=dict(size=9, color="#444", line=dict(width=1, color="#fff")),
+            hovertext=[f"國文 {x:.0f},數學 {y:.0f}<br>x 距離 {dx:+.1f},y 距離 {dy:+.1f}"
+                       for x, y, dx, dy in zip(sd_sample['統測_國文分數'],
+                                                sd_sample['統測_數學B分數'],
+                                                sd_sample['dx'], sd_sample['dy'])],
+            hoverinfo="text",
+            showlegend=False,
+        ))
+        # 為每個點畫水平 / 垂直距離線
+        for _, row in sd_sample.iterrows():
+            xi, yi = row["統測_國文分數"], row["統測_數學B分數"]
+            cx = "#22c55e" if xi >= x_bar else "#ff4b4b"
+            cy = "#22c55e" if yi >= y_bar else "#ff4b4b"
+            if which != "只看 y 距離 (sy)":
+                fig_sd.add_shape(type="line", x0=x_bar, y0=yi, x1=xi, y1=yi,
+                                 line=dict(color=cx, width=1.5))
+            if which != "只看 x 距離 (sx)":
+                fig_sd.add_shape(type="line", x0=xi, y0=y_bar, x1=xi, y1=yi,
+                                 line=dict(color=cy, width=1.5, dash="dot"))
+        # 平均十字線
+        fig_sd.add_vline(x=x_bar, line_dash="dash", line_color="#888",
+                         annotation_text=f"x̄ = {x_bar:.1f}", annotation_position="top")
+        fig_sd.add_hline(y=y_bar, line_dash="dash", line_color="#888",
+                         annotation_text=f"ȳ = {y_bar:.1f}", annotation_position="right")
+        # ±1σ 矩形
+        if show_sd_box:
+            fig_sd.add_shape(type="rect",
+                             x0=x_bar - sx, x1=x_bar + sx,
+                             y0=y_bar - sy, y1=y_bar + sy,
+                             line=dict(color="#ffcc00", width=2),
+                             fillcolor="#ffcc00", opacity=0.10, layer="below")
+            fig_sd.add_annotation(x=x_bar + sx, y=y_bar + sy,
+                                  text=f"±1σ 區: 寬 {2*sx:.1f} × 高 {2*sy:.1f}",
+                                  showarrow=False, font=dict(size=13, color="#b58900"),
+                                  xanchor="left", yanchor="bottom")
+        fig_sd.update_layout(
+            font_size=16, height=520,
+            xaxis_title="國文 (x)", yaxis_title="數學 (y)",
+            margin=dict(l=40, r=40, t=40, b=40),
+        )
+        st.plotly_chart(fig_sd, use_container_width=True)
+        st.caption("實線 = x 方向距離 (xi − x̄)　·　虛線 = y 方向距離 (yi − ȳ)　·　"
+                   "綠 = 高於平均、紅 = 低於平均")
+
+        # 抽樣 6 筆 對照表
+        st.markdown("##### 抽樣 6 筆距離計算")
+        show_tbl = sd_sample.head(6)[["統測_國文分數", "統測_數學B分數", "dx", "dy"]].copy()
+        show_tbl["(xi−x̄)²"] = (show_tbl["dx"] ** 2).round(1)
+        show_tbl["(yi−ȳ)²"] = (show_tbl["dy"] ** 2).round(1)
+        show_tbl = show_tbl.rename(columns={
+            "統測_國文分數": "國文 xi", "統測_數學B分數": "數學 yi",
+            "dx": "xi − x̄", "dy": "yi − ȳ",
+        })
+        show_tbl[["xi − x̄", "yi − ȳ"]] = show_tbl[["xi − x̄", "yi − ȳ"]].round(1)
+        st.dataframe(show_tbl, hide_index=True)
+
+        # 全班最終 sx / sy
+        sum_sq_x = float(((sub["統測_國文分數"] - x_bar) ** 2).sum())
+        sum_sq_y = float(((sub["統測_數學B分數"] - y_bar) ** 2).sum())
+        n_all = len(sub)
+        c_x, c_y = st.columns(2)
+        with c_x:
+            st.markdown("**🟦 國文 sx**")
+            a1, a2, a3 = st.columns(3)
+            a1.metric("Σ(xi−x̄)²", f"{sum_sq_x:,.0f}")
+            a2.metric("÷ (n−1)", f"{sum_sq_x/(n_all-1):,.2f}")
+            a3.metric("sx = √…", f"{sx:.2f}")
+        with c_y:
+            st.markdown("**🟥 數學 sy**")
+            b1, b2, b3 = st.columns(3)
+            b1.metric("Σ(yi−ȳ)²", f"{sum_sq_y:,.0f}")
+            b2.metric("÷ (n−1)", f"{sum_sq_y/(n_all-1):,.2f}")
+            b3.metric("sy = √…", f"{sy:.2f}")
+        st.info(
+            f"💡 國文:平均 {x_bar:.1f},標準差 **{sx:.2f}** → 約 68% 的人落在 "
+            f"{x_bar - sx:.0f} ~ {x_bar + sx:.0f} 分　|　"
+            f"數學:平均 {y_bar:.1f},標準差 **{sy:.2f}** → 約 {y_bar - sy:.0f} ~ {y_bar + sy:.0f} 分"
         )
 
     with tab_calc:
@@ -1053,39 +1192,104 @@ def s8c():  # 小數字練習：手算 r + 四象限
             st.success(f"答案：**r = {r:.2f}**　→ 強正相關 📈")
 
     with c_right:
-        st.markdown("#### 🎨 四象限圖")
-        viz = data.copy()
-        viz["sign"] = np.where(viz["(xi−x̄)(yi−ȳ)"] >= 0,
-                               "正貢獻 (右上＋左下)", "負貢獻 (左上＋右下)")
-        fig = px.scatter(
-            viz, x="x", y="y", color="sign", text="i",
-            color_discrete_map={"正貢獻 (右上＋左下)": "#22c55e",
-                                "負貢獻 (左上＋右下)": "#ff4b4b"},
-            labels={"x": "x", "y": "y"},
-        )
-        fig.update_traces(marker=dict(size=20), textposition="top center",
-                          textfont=dict(size=14, color="#fff"))
-        fig.add_vline(x=x_bar, line_dash="dash", line_color="#888",
-                      annotation_text=f"x̄ = {x_bar:.0f}", annotation_position="top")
-        fig.add_hline(y=y_bar, line_dash="dash", line_color="#888",
-                      annotation_text=f"ȳ = {y_bar:.0f}", annotation_position="right")
-        # 每個點畫貢獻矩形
-        for _, row in viz.iterrows():
-            rcolor = "#22c55e" if row["(xi−x̄)(yi−ȳ)"] >= 0 else "#ff4b4b"
-            fig.add_shape(type="rect", x0=x_bar, y0=y_bar, x1=row["x"], y1=row["y"],
-                          line=dict(color=rcolor, width=1),
-                          fillcolor=rcolor, opacity=0.15, layer="below")
-        fig.update_layout(font_size=16, height=440, legend_title_text="",
-                          legend=dict(orientation="h", y=-0.2))
-        st.plotly_chart(fig, use_container_width=True)
+        tab_r, tab_sd_small = st.tabs(["🎨 r 的四象限(貢獻矩形)", "📏 算 sx, sy(距離)"])
 
-        n_pos = int((data["(xi−x̄)(yi−ȳ)"] >= 0).sum())
-        n_neg = n - n_pos
-        c1, c2, c3 = st.columns(3)
-        c1.metric("正貢獻", f"{n_pos} 點")
-        c2.metric("負貢獻", f"{n_neg} 點")
-        c3.metric("Σ", f"{sum_xy:.0f}")
-        st.caption("綠色矩形 = 正貢獻；矩形面積 ∝ |(xi−x̄)(yi−ȳ)|。")
+        with tab_r:
+            viz = data.copy()
+            viz["sign"] = np.where(viz["(xi−x̄)(yi−ȳ)"] >= 0,
+                                   "正貢獻 (右上＋左下)", "負貢獻 (左上＋右下)")
+            fig = px.scatter(
+                viz, x="x", y="y", color="sign", text="i",
+                color_discrete_map={"正貢獻 (右上＋左下)": "#22c55e",
+                                    "負貢獻 (左上＋右下)": "#ff4b4b"},
+                labels={"x": "x", "y": "y"},
+            )
+            fig.update_traces(marker=dict(size=20), textposition="top center",
+                              textfont=dict(size=14, color="#fff"))
+            fig.add_vline(x=x_bar, line_dash="dash", line_color="#888",
+                          annotation_text=f"x̄ = {x_bar:.0f}", annotation_position="top")
+            fig.add_hline(y=y_bar, line_dash="dash", line_color="#888",
+                          annotation_text=f"ȳ = {y_bar:.0f}", annotation_position="right")
+            # 每個點畫貢獻矩形
+            for _, row in viz.iterrows():
+                rcolor = "#22c55e" if row["(xi−x̄)(yi−ȳ)"] >= 0 else "#ff4b4b"
+                fig.add_shape(type="rect", x0=x_bar, y0=y_bar, x1=row["x"], y1=row["y"],
+                              line=dict(color=rcolor, width=1),
+                              fillcolor=rcolor, opacity=0.15, layer="below")
+            fig.update_layout(font_size=16, height=440, legend_title_text="",
+                              legend=dict(orientation="h", y=-0.2))
+            st.plotly_chart(fig, use_container_width=True)
+
+            n_pos = int((data["(xi−x̄)(yi−ȳ)"] >= 0).sum())
+            n_neg = n - n_pos
+            c1, c2, c3 = st.columns(3)
+            c1.metric("正貢獻", f"{n_pos} 點")
+            c2.metric("負貢獻", f"{n_neg} 點")
+            c3.metric("Σ", f"{sum_xy:.0f}")
+            st.caption("綠色矩形 = 正貢獻;矩形面積 ∝ |(xi−x̄)(yi−ȳ)|。")
+
+        with tab_sd_small:
+            fig_sd5 = go.Figure()
+            # 散點 + 編號
+            fig_sd5.add_trace(go.Scatter(
+                x=data["x"], y=data["y"], mode="markers+text",
+                marker=dict(size=20, color="#444", line=dict(width=1, color="#fff")),
+                text=data["i"], textposition="top center",
+                textfont=dict(size=14, color="#fff"),
+                hovertext=[f"i={i}: x={x},y={y}<br>x−x̄={x-x_bar:+.1f},y−ȳ={y-y_bar:+.1f}"
+                           for i, x, y in zip(data['i'], data['x'], data['y'])],
+                hoverinfo="text",
+                showlegend=False,
+            ))
+            # 每個點的 x、y 距離線
+            for _, row in data.iterrows():
+                xi, yi = row["x"], row["y"]
+                cx = "#22c55e" if xi >= x_bar else "#ff4b4b"
+                cy = "#22c55e" if yi >= y_bar else "#ff4b4b"
+                # x 距離(實線)
+                fig_sd5.add_shape(type="line", x0=x_bar, y0=yi, x1=xi, y1=yi,
+                                  line=dict(color=cx, width=2))
+                # y 距離(虛線)
+                fig_sd5.add_shape(type="line", x0=xi, y0=y_bar, x1=xi, y1=yi,
+                                  line=dict(color=cy, width=2, dash="dot"))
+            # 平均線
+            fig_sd5.add_vline(x=x_bar, line_dash="dash", line_color="#888",
+                              annotation_text=f"x̄ = {x_bar:.0f}", annotation_position="top")
+            fig_sd5.add_hline(y=y_bar, line_dash="dash", line_color="#888",
+                              annotation_text=f"ȳ = {y_bar:.0f}", annotation_position="right")
+            # ±1σ 矩形
+            fig_sd5.add_shape(type="rect",
+                              x0=x_bar - sx, x1=x_bar + sx,
+                              y0=y_bar - sy, y1=y_bar + sy,
+                              line=dict(color="#ffcc00", width=2),
+                              fillcolor="#ffcc00", opacity=0.10, layer="below")
+            fig_sd5.add_annotation(x=x_bar + sx, y=y_bar + sy,
+                                   text=f"±1σ 區: 寬 {2*sx:.2f} × 高 {2*sy:.2f}",
+                                   showarrow=False, font=dict(size=12, color="#b58900"),
+                                   xanchor="left", yanchor="bottom")
+            fig_sd5.update_layout(font_size=16, height=440,
+                                  xaxis_title="x", yaxis_title="y",
+                                  margin=dict(l=40, r=40, t=40, b=40))
+            st.plotly_chart(fig_sd5, use_container_width=True)
+            st.caption("實線 = x 方向距離 (xi − x̄)　·　虛線 = y 方向距離 (yi − ȳ)　·　"
+                       "綠 = 高於平均、紅 = 低於平均")
+
+            # 計算明細
+            sd_tbl = data[["i", "x", "y", "xi−x̄", "yi−ȳ"]].copy()
+            sd_tbl["(xi−x̄)²"] = (sd_tbl["xi−x̄"] ** 2).round(2)
+            sd_tbl["(yi−ȳ)²"] = (sd_tbl["yi−ȳ"] ** 2).round(2)
+            st.dataframe(sd_tbl, hide_index=True, use_container_width=True)
+            sum_sq_x = float((data["xi−x̄"] ** 2).sum())
+            sum_sq_y = float((data["yi−ȳ"] ** 2).sum())
+            c_a, c_b = st.columns(2)
+            with c_a:
+                st.metric("Σ(xi−x̄)²", f"{sum_sq_x:.0f}")
+                st.metric("÷ (n−1) = ÷4", f"{sum_sq_x/4:.2f}")
+                st.metric("sx = √…", f"{sx:.3f}")
+            with c_b:
+                st.metric("Σ(yi−ȳ)²", f"{sum_sq_y:.0f}")
+                st.metric("÷ (n−1) = ÷4", f"{sum_sq_y/4:.2f}")
+                st.metric("sy = √…", f"{sy:.3f}")
 
 
 def s9():  # 分組討論
@@ -1121,6 +1325,61 @@ def s9():  # 分組討論
                 st.error("⏰ 時間到！")
                 if st.button("重置", key="rst_t"):
                     st.session_state.ts = None; st.rerun()
+
+    # ── 📤 上傳小組發現 ───────────────────────────────────────
+    _persist_voter_state()
+    st.markdown("---")
+    st.markdown("### 📤 把你們組的發現上傳給全班")
+
+    QKEY_S9 = "group_findings"
+    online = gsheet.is_connected()
+    group, sid, name = _voter_inputs("s9")
+
+    picked = st.text_input(
+        "我們的問題", key="s9_pick",
+        placeholder="例:專一和專二,哪科對總分影響更大?",
+    )
+
+    can_send = (
+        bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
+        and bool(str(picked).strip())
+    )
+    c_btn, c_msg = st.columns([1, 3])
+    with c_btn:
+        if st.button("📤 上傳問題", key="s9_send", use_container_width=True,
+                     disabled=not can_send):
+            ok, msg = gsheet.add_finding(
+                QKEY_S9, picked_question=str(picked), finding="",
+                group=group, student_id=sid, name=name,
+            )
+            if ok:
+                st.toast(f"✅ {name} 上傳成功")
+            else:
+                st.error(msg)
+            st.rerun()
+    with c_msg:
+        if not can_send:
+            st.caption("👆 填好 第幾組／學號／姓名 + 寫出問題 才能上傳")
+
+    rows = gsheet.get_findings(QKEY_S9)
+    if rows:
+        df_f = pd.DataFrame(rows, columns=["問題", "時間", "組別", "學號", "姓名", "我們的發現"])
+        df_f = df_f.iloc[::-1].reset_index(drop=True)  # 最新在前
+        st.markdown(f"#### 📋 全班問題一覽({len(df_f)} 筆)")
+        st.dataframe(df_f[["組別", "姓名", "問題", "時間"]],
+                     hide_index=True, use_container_width=True, height=280)
+    else:
+        st.info("尚無組別上傳。")
+
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet(fallback:本機 session)"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
 
 
 _S10_QUESTIONS = [
@@ -1408,15 +1667,34 @@ def s12():  # 箱型圖
                 st.markdown(f"- **第 {grp} 組 · {nm}**：{txt}")
 
 
-# 114 學年度四技二專統測各科官方三標（資料來源：教育部技專校院招生委員會）
-# 欄位：(到考人數, 平均分數, 前標, 均標, 後標, 群類標示)
-_TWE_114_THREE = {
-    "國文": (62766, 50.56, 62, 50, 40, "共同科目"),
-    "英文": (62655, 45.88, 64, 41, 26, "共同科目"),
-    "數學": (33543, 40.00, 52, 36, 24, "共同科目（數學 B）"),
-    "專一": (16107, 56.43, 70, 56, 42, "專業科目(一) · 商管外語群"),
-    "專二": (13713, 49.31, 64, 46, 32, "專業科目(二) · 商業與管理群"),
+# 四技二專統測各科官方三標(資料來源:教育部技專校院招生委員會)
+# 欄位:(到考人數, 平均分數, 前標, 均標, 後標, 群類標示)
+# 注意:112 學年度官方未公布均標,以 None 表示。
+_TWE_OFFICIAL = {
+    114: {
+        "國文": (62766, 50.56, 62, 50, 40, "共同科目"),
+        "英文": (62655, 45.88, 64, 41, 26, "共同科目"),
+        "數學": (33543, 40.00, 52, 36, 24, "共同科目(數學 B)"),
+        "專一": (16107, 56.43, 70, 56, 42, "專業科目(一) · 商管外語群"),
+        "專二": (13713, 49.31, 64, 46, 32, "專業科目(二) · 商業與管理群"),
+    },
+    113: {
+        "國文": (65514, 54.83, 68, 56, 42, "共同科目"),
+        "英文": (65379, 46.84, 67, 41, 26, "共同科目"),
+        "數學": (35516, 46.49, 60, 44, 32, "共同科目(數學 B)"),
+        "專一": (17130, 59.09, 70, 60, 50, "專業科目(一) · 商管外語群"),
+        "專二": (14380, 43.52, 58, 38, 28, "專業科目(二) · 商業與管理群"),
+    },
+    112: {
+        "國文": (70201, 51.99, 64, None, 40, "共同科目"),
+        "英文": (70010, 43.50, 59, None, 25.5, "共同科目"),
+        "數學": (38304, 39.58, 48, None, 28, "共同科目(數學 B)"),
+        "專一": (18369, 51.94, 64, None, 38, "專業科目(一) · 商管外語群"),
+        "專二": (15141, 41.91, 54, None, 30, "專業科目(二) · 商業與管理群"),
+    },
 }
+# 向後相容:許多地方仍引用 _TWE_114_THREE
+_TWE_114_THREE = _TWE_OFFICIAL[114]
 
 
 def s13():  # Q1/Q2/Q3
@@ -1424,6 +1702,10 @@ def s13():  # Q1/Q2/Q3
     st.markdown('<h2 class="st">箱型圖裡的數學 = 統測三標</h2>', unsafe_allow_html=True)
     st.caption("💡 統測每年公布「前標／均標／後標」三標，其實就是 Q₃／Q₂／Q₁——箱型圖的箱體！"
                "（學測才公布五標，多了頂標、底標）")
+    st.markdown(
+        '🔍 [Google 搜尋:統測 前均後標](https://www.google.com/search?q=%E7%B5%B1%E6%B8%AC+%E5%89%8D%E5%9D%87%E5%BE%8C%E6%A8%99)',
+        unsafe_allow_html=True,
+    )
 
     subj = st.selectbox("選一科來解說", list(SUBJ.keys()), key="s13s")
     data = wide[SUBJ[subj]].dropna()
@@ -1474,42 +1756,102 @@ def s13():  # Q1/Q2/Q3
             "所以箱型圖的箱體（Q₁ 到 Q₃）就是「**後標到前標**」這 50% 中間考生的範圍！"
             "（圖上多畫的頂標/底標屬於學測系統，統測不公布）")
 
-    # ── 114 學年度全國統測官方三標 vs 本班 ─────────────────────────────
-    if subj in _TWE_114_THREE:
-        n, mean, top, mid, bot, group_label = _TWE_114_THREE[subj]
-        st.markdown(f"#### 📊 114 學年度全國統測 vs 本班（{subj}）")
-        st.caption(f"全國資料：{group_label} · 到考 {n:,} 人 · 平均 {mean:.2f}")
+    # ── 全國統測官方三標 vs 本校(可切換年度) ─────────────────────────────
+    st.markdown("---")
+    cmp_subjects = [s for s in SUBJ.keys() if any(s in _TWE_OFFICIAL[y] for y in _TWE_OFFICIAL)]
+    if cmp_subjects:
+        c_pick1, c_pick2, c_pick3 = st.columns([1, 1, 1])
+        with c_pick1:
+            default_idx = cmp_subjects.index(subj) if subj in cmp_subjects else 0
+            subj_cmp = st.selectbox(
+                "下半段比對科目(可獨立切換)",
+                cmp_subjects,
+                index=default_idx,
+                key="s13s_cmp",
+            )
+        with c_pick2:
+            year_options = ["全部三屆"]
+            if "畢業年度" in wide.columns:
+                year_options += [f"{int(y)} 學年度" for y in sorted(wide["畢業年度"].dropna().unique())]
+            year_pick = st.selectbox("年度", year_options, key="s13s_year")
+        with c_pick3:
+            mode = st.selectbox(
+                "缺考處理",
+                ["只算到考(預設)", "把缺考也納入(NaN→0)"],
+                key="s13s_absent",
+            )
+        include_absent = mode.startswith("把缺考")
+
+        def _slice(year_val):
+            if year_val is None:
+                base = wide[SUBJ[subj_cmp]]
+            else:
+                base = wide.loc[wide["畢業年度"] == year_val, SUBJ[subj_cmp]]
+            return base.fillna(0) if include_absent else base.dropna()
+
+        if year_pick == "全部三屆" or "畢業年度" not in wide.columns:
+            data_cmp = _slice(None)
+            year_label = "全部三屆"
+            nat_year = 114  # 預設用最新一屆作為全國基準
+        else:
+            y = int(year_pick.split()[0])
+            data_cmp = _slice(y)
+            year_label = f"{y} 學年度畢業"
+            nat_year = y
+        if include_absent:
+            year_label += " · 含缺考"
+
+        q1_c, q2_c, q3_c = data_cmp.quantile([.25, .5, .75])
+
+        # 取對應屆別的全國資料(若該屆無此科,退回 114)
+        if subj_cmp in _TWE_OFFICIAL.get(nat_year, {}):
+            n, mean, top, mid, bot, group_label = _TWE_OFFICIAL[nat_year][subj_cmp]
+            nat_year_used = nat_year
+        else:
+            n, mean, top, mid, bot, group_label = _TWE_OFFICIAL[114][subj_cmp]
+            nat_year_used = 114
+
+        mid_str = f"{mid}" if mid is not None else "—(未公布)"
+        st.markdown(f"#### 📊 全國統測 {nat_year_used} 學年度 vs 本校 · {subj_cmp}({year_label})")
+        st.caption(f"全國資料:{group_label} · 到考 {n:,} 人 · 平均 {mean:.2f}"
+                   + ("　· 112 學年度官方未公布均標" if mid is None else ""))
         c_nat, c_cls = st.columns(2)
         c_nat.markdown(f"""
 <div class="big" style="line-height:1.6">
-<b>🌐 全國 114 學年度</b><br>
-前標：<b>{top}</b>　·　均標：<b>{mid}</b>　·　後標：<b>{bot}</b>
+<b>🌐 全國 {nat_year_used} 學年度</b><br>
+前標:<b>{top}</b>　·　均標:<b>{mid_str}</b>　·　後標:<b>{bot}</b>
 </div>""", unsafe_allow_html=True)
         c_cls.markdown(f"""
 <div class="big" style="line-height:1.6">
-<b>🏫 本班</b>（n = {len(data)}，平均 {data.mean():.2f}）<br>
-前標 Q₃：<b>{q3:.1f}</b>　·　均標 Q₂：<b>{q2:.1f}</b>　·　後標 Q₁：<b>{q1:.1f}</b>
+<b>🏫 本校 · {year_label}</b>(n = {len(data_cmp)},平均 {data_cmp.mean():.2f})<br>
+前標 Q₃:<b>{q3_c:.1f}</b>　·　均標 Q₂:<b>{q2_c:.1f}</b>　·　後標 Q₁:<b>{q1_c:.1f}</b>
 </div>""", unsafe_allow_html=True)
 
-        # ── 客觀對照：本班 − 全國 ──────────────────────────────────
+        # ── 客觀對照:本校 − 全國 ──────────────────────────────────
         nat_iqr = top - bot
-        cls_iqr = q3 - q1
-        d_top, d_mid, d_bot = q3 - top, q2 - mid, q1 - bot
+        cls_iqr = q3_c - q1_c
+        d_top, d_bot = q3_c - top, q1_c - bot
         d_iqr = cls_iqr - nat_iqr
-        d_mean = data.mean() - mean
+        d_mean = data_cmp.mean() - mean
         spread_word = (
-            "更集中（IQR 較窄）" if d_iqr < 0
-            else "更分散（IQR 較寬）" if d_iqr > 0
+            "更集中(IQR 較窄)" if d_iqr < 0
+            else "更分散(IQR 較寬)" if d_iqr > 0
             else "與全國一致"
         )
-        st.info(
-            "**📌 客觀對照（本班 − 全國，正值＝本班較高）**\n\n"
-            f"- 前標 Q₃：{q3:.1f} − {top} = **{d_top:+.1f}** 分\n"
-            f"- 均標 Q₂：{q2:.1f} − {mid} = **{d_mid:+.1f}** 分\n"
-            f"- 後標 Q₁：{q1:.1f} − {bot} = **{d_bot:+.1f}** 分\n"
-            f"- 平均：{data.mean():.2f} − {mean:.2f} = **{d_mean:+.2f}** 分\n"
-            f"- 分布寬度（IQR）：本班 {cls_iqr:.1f} vs 全國 {nat_iqr} → 本班分布{spread_word}"
+        mid_line = (
+            f"- 均標 Q₂:{q2_c:.1f} − {mid} = **{q2_c - mid:+.1f}** 分\n"
+            if mid is not None
+            else f"- 均標 Q₂:{q2_c:.1f}(全國 {nat_year_used} 未公布均標,無法比對)\n"
         )
+        st.info(
+            f"**📌 客觀對照(本校 {year_label} − 全國 {nat_year_used},正值＝本校較高)**\n\n"
+            f"- 前標 Q₃:{q3_c:.1f} − {top} = **{d_top:+.1f}** 分\n"
+            f"{mid_line}"
+            f"- 後標 Q₁:{q1_c:.1f} − {bot} = **{d_bot:+.1f}** 分\n"
+            f"- 平均:{data_cmp.mean():.2f} − {mean:.2f} = **{d_mean:+.2f}** 分\n"
+            f"- 分布寬度(IQR):本校 {cls_iqr:.1f} vs 全國 {nat_iqr} → 本校分布{spread_word}"
+        )
+
 
 
 def s14():  # EDA 總結
@@ -1994,6 +2336,91 @@ def s21b():  # 科目分數 → 加權落點
         )
 
 
+def s21b2():  # 落點後反思:優劣勢、心得
+    _persist_voter_state()
+    st.markdown('<span class="tag">活動 9 · 個人反思</span>', unsafe_allow_html=True)
+    st.markdown('<h2 class="st">📝 落點之後,聊聊你自己</h2>', unsafe_allow_html=True)
+    st.caption("看完落點分析,花一點時間整理你對自己的想法。下面三題不一定要長,寫下真實感受就好。")
+
+    QKEY_REF = "self_reflection"
+    HEADERS = ["時間", "組別", "學號", "姓名",
+               "優勢科目", "對應有利科系",
+               "劣勢科目", "對應該避開科系",
+               "心情/收穫"]
+    online = gsheet.is_connected()
+    group, sid, name = _voter_inputs("s21b2")
+
+    st.markdown("##### 💪 你的優勢")
+    c1, c2 = st.columns(2)
+    adv_subj = c1.text_input("優勢科目", key="s21b2_adv_subj",
+                             placeholder="例:英文、專一")
+    adv_dept = c2.text_input("對應哪個科系比較有利?", key="s21b2_adv_dept",
+                             placeholder="例:應用外語、商管系")
+
+    st.markdown("##### ⚠️ 你的劣勢")
+    c3, c4 = st.columns(2)
+    weak_subj = c3.text_input("劣勢科目", key="s21b2_weak_subj",
+                              placeholder="例:數學B")
+    weak_dept = c4.text_input("對應哪個科系該避開?", key="s21b2_weak_dept",
+                              placeholder="例:資訊管理、會計類")
+
+    st.markdown("##### 💭 你的心情與收穫")
+    feeling = st.text_area(
+        "做完這些活動你的心情如何?有沒有更了解數學/統計、或大學相關資訊的用處?",
+        key="s21b2_feel", height=130,
+        placeholder="例:原本覺得統計只是公式,看到自己的分數變成圖才知道意義……",
+    )
+
+    can_send = (
+        bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
+        and any(x.strip() for x in [adv_subj, adv_dept, weak_subj, weak_dept, feeling])
+    )
+    c_btn, c_msg = st.columns([1, 3])
+    with c_btn:
+        if st.button("📤 上傳反思", key="s21b2_send", use_container_width=True,
+                     disabled=not can_send):
+            from datetime import datetime
+            ts = datetime.now().isoformat(timespec="seconds")
+            ok, msg = gsheet.add_record(
+                QKEY_REF, HEADERS,
+                [ts, group, sid, name,
+                 adv_subj.strip(), adv_dept.strip(),
+                 weak_subj.strip(), weak_dept.strip(),
+                 feeling.strip()],
+            )
+            if ok:
+                st.toast(f"✅ {name} 上傳成功")
+            else:
+                st.error(msg)
+            st.rerun()
+    with c_msg:
+        if not can_send:
+            st.caption("👆 填好 第幾組／學號／姓名 + 至少寫一題 才能上傳")
+
+    rows = gsheet.get_records(QKEY_REF, HEADERS)
+    if rows:
+        df_r = pd.DataFrame(rows, columns=HEADERS)
+        df_r = df_r.iloc[::-1].reset_index(drop=True)
+        st.markdown(f"#### 📋 全班反思一覽({len(df_r)} 筆)")
+        st.dataframe(
+            df_r[["組別", "姓名", "優勢科目", "對應有利科系",
+                  "劣勢科目", "對應該避開科系", "心情/收穫", "時間"]],
+            hide_index=True, use_container_width=True, height=320,
+        )
+    else:
+        st.info("尚無同學上傳。")
+
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet(fallback:本機 session)"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def s21c():  # 推甄 vs 分發
     from data_loader import load_thresholds, load_tuijian_stats, load_tuijian_jifen_stats
     st.markdown('<span class="tag">活動 9 · 數學老師</span>', unsafe_allow_html=True)
@@ -2167,13 +2594,77 @@ def s22():  # 總結：打破預測
 </div>
 </div>""", unsafe_allow_html=True)
 
+    # ── 📎 上傳 Colab 連結 ─────────────────────────────────────
+    _persist_voter_state()
+    st.markdown("---")
+    st.markdown("### 📎 把你的 Colab 連結交上來")
+    st.caption("把今天的 Colab 筆記本「共用 → 任何知道連結的人都可檢視」後,把網址貼到下方。")
+
+    QKEY_COLAB = "colab_submissions"
+    online = gsheet.is_connected()
+    group, sid, name = _voter_inputs("s22")
+
+    colab_url = st.text_input(
+        "Colab 連結",
+        key="s22_colab_url",
+        placeholder="https://colab.research.google.com/drive/...",
+    )
+
+    can_send = (
+        bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
+        and colab_url.strip().startswith("http")
+    )
+    c_btn, c_msg = st.columns([1, 3])
+    with c_btn:
+        if st.button("📤 上傳連結", key="s22_send", use_container_width=True,
+                     disabled=not can_send):
+            ok, msg = gsheet.add_finding(
+                QKEY_COLAB, picked_question=colab_url.strip(), finding="",
+                group=group, student_id=sid, name=name,
+            )
+            if ok:
+                st.toast(f"✅ {name} 上傳成功")
+            else:
+                st.error(msg)
+            st.rerun()
+    with c_msg:
+        if not can_send:
+            st.caption("👆 填好 第幾組／學號／姓名 + 貼上 Colab 連結(http 開頭)才能上傳")
+
+    rows = gsheet.get_findings(QKEY_COLAB)
+    if rows:
+        df_c = pd.DataFrame(rows, columns=["Colab 連結", "時間", "組別", "學號", "姓名", "備註"])
+        df_c = df_c.iloc[::-1].reset_index(drop=True)
+        st.markdown(f"#### 📋 全班繳交一覽({len(df_c)} 筆)")
+        st.dataframe(
+            df_c[["組別", "姓名", "Colab 連結", "時間"]],
+            hide_index=True, use_container_width=True, height=320,
+            column_config={
+                "Colab 連結": st.column_config.LinkColumn(
+                    "Colab 連結", display_text="🔗 開啟"
+                ),
+            },
+        )
+    else:
+        st.info("尚無同學上傳。")
+
+    status_text = (
+        "🟢 已連結 Google Sheet · 全班即時同步"
+        if online
+        else "🟡 未連結 Google Sheet(fallback:本機 session)"
+    )
+    st.markdown(
+        f"<div style='text-align:center;color:#666;font-size:14px;margin-top:8px'>{status_text}</div>",
+        unsafe_allow_html=True,
+    )
+
 
 # ═══════════════════════════════════════════════════════════════════
 SLIDE_FUNCS = [
     s0, s1, s2, s3, s4, s5, s6, s_pay, s6b,              # 0–8
     s10, s11, s11c, s11b, s13, s12, s14,                 # 9–15（原第三階段：圖表教學）
     s7, s8a, s8b, s8c, s9,                               # 16–20（原第二階段：相關介紹）
-    s15, s16, s15b, s15c, s21b, s21c, s22,               # 21–27
+    s15, s16, s15b, s15c, s21b, s21b2, s21c, s22,        # 21–28
 ]
 N = len(SLIDE_FUNCS)
 

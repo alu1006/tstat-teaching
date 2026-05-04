@@ -173,3 +173,126 @@ def reset_votes(question_key: str):
 
 def is_connected() -> bool:
     return _client() is not None
+
+
+# ── 小組發現:6 欄位、不做唯一性檢查 ─────────────────────────────────
+FINDING_HEADERS = ["picked_question", "timestamp", "組別", "學號", "姓名", "我們的發現"]
+
+
+def _finding_sheet(worksheet_name: str):
+    cli = _client()
+    if cli is None:
+        return None
+    try:
+        sid = st.secrets["gsheet"]["sheet_id"]
+        sh = cli.open_by_key(sid)
+        try:
+            ws = sh.worksheet(worksheet_name)
+        except Exception:
+            ws = sh.add_worksheet(title=worksheet_name, rows=200, cols=10)
+            ws.append_row(FINDING_HEADERS)
+            return ws
+        try:
+            first = ws.row_values(1)
+            if first[:6] != FINDING_HEADERS:
+                ws.update("A1:F1", [FINDING_HEADERS])
+        except Exception:
+            pass
+        return ws
+    except Exception:
+        return None
+
+
+def add_finding(
+    question_key: str,
+    picked_question: str,
+    finding: str,
+    group: str = "",
+    student_id: str = "",
+    name: str = "",
+) -> tuple[bool, str]:
+    """寫入一筆小組發現。允許同一人重複提交。"""
+    ws = _finding_sheet(question_key)
+    fallback_key = f"_findings_{question_key}"
+    from datetime import datetime
+    ts = datetime.now().isoformat(timespec="seconds")
+    row = [picked_question, ts, group, student_id, name, finding]
+
+    if ws is None:
+        if fallback_key not in st.session_state:
+            st.session_state[fallback_key] = []
+        st.session_state[fallback_key].append(row)
+        return True, "已記錄(本機暫存)"
+    try:
+        ws.append_row(row)
+        return True, "已寫入 Google Sheet"
+    except Exception as e:
+        return False, f"寫入失敗:{e}"
+
+
+def get_findings(question_key: str) -> list[list[str]]:
+    ws = _finding_sheet(question_key)
+    fallback_key = f"_findings_{question_key}"
+    if ws is None:
+        return st.session_state.get(fallback_key, [])
+    try:
+        rows = ws.get_all_values()
+        return rows[1:] if rows else []
+    except Exception:
+        return st.session_state.get(fallback_key, [])
+
+
+# ── 通用多欄位記錄 ───────────────────────────────────────────────
+def _record_sheet(worksheet_name: str, headers: list[str]):
+    cli = _client()
+    if cli is None:
+        return None
+    try:
+        sid = st.secrets["gsheet"]["sheet_id"]
+        sh = cli.open_by_key(sid)
+        try:
+            ws = sh.worksheet(worksheet_name)
+        except Exception:
+            ws = sh.add_worksheet(title=worksheet_name, rows=300, cols=max(10, len(headers)))
+            ws.append_row(headers)
+            return ws
+        try:
+            first = ws.row_values(1)
+            if first[:len(headers)] != headers:
+                end_col = chr(ord("A") + len(headers) - 1)
+                ws.update(f"A1:{end_col}1", [headers])
+        except Exception:
+            pass
+        return ws
+    except Exception:
+        return None
+
+
+def add_record(question_key: str, headers: list[str], values: list) -> tuple[bool, str]:
+    """通用:寫入一列任意欄位的紀錄。values 順序需對應 headers。"""
+    ws = _record_sheet(question_key, headers)
+    fallback_key = f"_records_{question_key}"
+    row = [str(v) for v in values]
+
+    if ws is None:
+        if fallback_key not in st.session_state:
+            st.session_state[fallback_key] = []
+        st.session_state[fallback_key].append(row)
+        return True, "已記錄(本機暫存)"
+    try:
+        ws.append_row(row)
+        return True, "已寫入 Google Sheet"
+    except Exception as e:
+        return False, f"寫入失敗:{e}"
+
+
+def get_records(question_key: str, headers: list[str]) -> list[list[str]]:
+    ws = _record_sheet(question_key, headers)
+    fallback_key = f"_records_{question_key}"
+    if ws is None:
+        return st.session_state.get(fallback_key, [])
+    try:
+        rows = ws.get_all_values()
+        return rows[1:] if rows else []
+    except Exception:
+        return st.session_state.get(fallback_key, [])
