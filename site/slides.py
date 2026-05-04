@@ -187,7 +187,7 @@ def _build_thumb_html(current: int) -> str:
 
 # ── Sidebar ───────────────────────────────────────────────────────
 with st.sidebar:
-    view = st.radio("", ["📋 目錄", "🖼 縮圖"],
+    view = st.radio("檢視模式", ["📋 目錄", "🖼 縮圖"],
                     horizontal=True, key="sb_view",
                     label_visibility="collapsed")
 
