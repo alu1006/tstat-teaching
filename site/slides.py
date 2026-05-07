@@ -346,21 +346,38 @@ def s2():  # 原始資料
 </div>""", unsafe_allow_html=True)
 
 
+# 用「記憶 key」(_mem_*)當 source of truth,widget key 在每次 run 從它還原,
+# 切頁時 Streamlit 即使清掉 widget key,記憶 key 也不會掉。
+_VOTER_MEM = {
+    "voter_group": "_mem_voter_group",
+    "voter_sid":   "_mem_voter_sid",
+    "voter_name":  "_mem_voter_name",
+}
+
+
 def _persist_voter_state():
-    """避免 Streamlit 在切頁時把 widget state 清掉——把 voter_xxx 重新指派給自己。
-    這個 trick 必須在每次 script run 的最頂端跑（不只是有 widget 的頁）。
-    """
-    for k in ("voter_group", "voter_sid", "voter_name"):
-        if k in st.session_state:
-            st.session_state[k] = st.session_state[k]
+    """在每次 script run 最頂端呼叫:把 widget→記憶 同步,再把 記憶→widget 還原。"""
+    # widget → 記憶(本次 run 開始前,上一輪的值還在 widget key 裡)
+    for k, mk in _VOTER_MEM.items():
+        if k in st.session_state and st.session_state[k]:
+            st.session_state[mk] = st.session_state[k]
+    # 記憶 → widget(若 widget key 被 Streamlit 清掉,從記憶還原)
+    for k, mk in _VOTER_MEM.items():
+        if mk in st.session_state and k not in st.session_state:
+            st.session_state[k] = st.session_state[mk]
 
 
 def _voter_inputs(prefix: str = ""):
-    """渲染 3 個身分輸入欄；所有頁共用同一個 widget key，狀態自動跨頁同步。"""
+    """渲染 3 個身分輸入欄;所有頁共用同一個 widget key,狀態自動跨頁同步。"""
+    _persist_voter_state()
     c_g, c_id, c_name = st.columns([1, 2, 2])
-    g = c_g.text_input("第幾組", key="voter_group", placeholder="例：3")
-    s = c_id.text_input("學號", key="voter_sid", placeholder="例：1130123")
-    n = c_name.text_input("姓名", key="voter_name", placeholder="例：王小明")
+    g = c_g.text_input("第幾組", key="voter_group", placeholder="例:3")
+    s = c_id.text_input("學號", key="voter_sid", placeholder="例:1130123")
+    n = c_name.text_input("姓名", key="voter_name", placeholder="例:王小明")
+    # 同步當前輸入到記憶,確保切頁前的最新值不會掉
+    for k, mk in _VOTER_MEM.items():
+        if k in st.session_state and st.session_state[k]:
+            st.session_state[mk] = st.session_state[k]
     return g, s, n
 
 
@@ -413,20 +430,6 @@ def s3():  # 投票（Google Sheet 連線版）
         unsafe_allow_html=True,
     )
 
-    c_reveal, c_reset = st.columns([3, 1])
-    if c_reveal.button("🔍 揭曉答案", key="reveal3", use_container_width=True):
-        st.session_state.revealed3 = True
-    if c_reset.button("♻ 清除投票", key="reset3", use_container_width=True):
-        gsheet.reset_votes(QKEY)
-        st.session_state.revealed3 = False
-        st.rerun()
-
-    if st.session_state.get("revealed3"):
-        avgs = {s: wide[col].mean() for s, col in SUBJ.items()}
-        lowest = min(avgs, key=avgs.get)
-        st.success(f"✅  答案是：**{lowest}**（平均 {avgs[lowest]:.1f} 分）")
-        for s, col in zip(SUBJ.keys(), st.columns(5)):
-            col.metric(s, f"{avgs[s]:.1f}")
 
 
 def s4():  # 揭曉長條圖
@@ -1686,7 +1689,7 @@ _TWE_OFFICIAL = {
         "專二": (14380, 43.52, 58, 38, 28, "專業科目(二) · 商業與管理群"),
     },
     112: {
-        "國文": (70201, 51.99, 64, None, 40, "共同科目"),
+        "國文": (70201, 51.99, 64, 52, 40, "共同科目"),
         "英文": (70010, 43.50, 59, None, 25.5, "共同科目"),
         "數學": (38304, 39.58, 48, None, 28, "共同科目(數學 B)"),
         "專一": (18369, 51.94, 64, None, 38, "專業科目(一) · 商管外語群"),
