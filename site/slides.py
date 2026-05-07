@@ -1416,7 +1416,6 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
 
     group, sid, name = _voter_inputs("s10")
     online = gsheet.is_connected()
-    voted = bool(sid) and gsheet.has_voted(_S10_QKEY, sid)
 
     picks: list[str] = []
     for i, (q, _ans) in enumerate(_S10_QUESTIONS):
@@ -1427,31 +1426,31 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
         )
         pick = c_pick.selectbox(
             "配對",
-            ["（請選擇）"] + _S10_OPTIONS,
+            ["(請選擇)"] + _S10_OPTIONS,
             key=f"s10_pick_{i}",
             label_visibility="collapsed",
-            disabled=voted,
         )
         picks.append(pick)
 
     all_picked = all(p in _S10_OPTIONS for p in picks)
     can_submit = (
         bool(group.strip()) and bool(sid.strip()) and bool(name.strip())
-        and all_picked and not voted
+        and all_picked
     )
 
-    if voted:
-        st.warning(f"⚠️ 學號 {sid} 已經提交過了，每人只能交一次")
-    elif not (group.strip() and sid.strip() and name.strip()):
-        st.info("👆 請先填好 第幾組／學號／姓名")
+    if not (group.strip() and sid.strip() and name.strip()):
+        st.info("👆 請先填好 第幾組/學號/姓名")
     elif not all_picked:
         st.info("👆 三題都選好之後才能提交")
+    else:
+        st.caption("✏️ 此頁可重複提交,最新一次會覆蓋舊紀錄(系統會記錄全部送出版本)")
 
     if st.button("📨 提交配對", key="s10_submit",
                  use_container_width=True, disabled=not can_submit):
         choice_str = "|".join(picks)
         ok, msg = gsheet.add_vote(
             _S10_QKEY, choice_str, group=group, student_id=sid, name=name,
+            allow_duplicate=True,
         )
         if ok:
             st.toast(f"✅ {name} 已提交")
@@ -1467,6 +1466,17 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
     )
 
     rows = gsheet.get_rows(_S10_QKEY)
+    # 允許重複提交時,同學號保留最新(timestamp 最大)一筆
+    if rows:
+        by_sid: dict[str, list[str]] = {}
+        for r in rows:
+            if not r or len(r) < 4:
+                continue
+            key = r[3].strip() or f"_anon_{r[1] if len(r) > 1 else ''}"
+            ts = r[1] if len(r) > 1 else ""
+            if key not in by_sid or ts > (by_sid[key][1] if len(by_sid[key]) > 1 else ""):
+                by_sid[key] = r
+        rows = list(by_sid.values())
     if rows:
         total = len(rows)
         per_q_correct = [0, 0, 0]

@@ -102,13 +102,13 @@ def add_vote(
     group: str = "",
     student_id: str = "",
     name: str = "",
+    allow_duplicate: bool = False,
 ) -> tuple[bool, str]:
     """寫入一票。回傳 (是否成功, 訊息)。
 
-    若該學號已投過，會擋下並回 (False, "已投過")。
+    預設:該學號已投過時擋下。allow_duplicate=True 時允許重複提交。
     """
-    # 先檢查是否已投過
-    if student_id and has_voted(question_key, student_id):
+    if not allow_duplicate and student_id and has_voted(question_key, student_id):
         return False, f"學號 {student_id} 已經投過票了"
 
     fallback_key = f"_votes_{question_key}"
