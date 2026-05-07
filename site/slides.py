@@ -1403,12 +1403,9 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
 🤔 &nbsp;剛剛我們看到的<span style="color:#22c55e;font-weight:bold">那張中位數與平均數的圖</span>，它叫做什麼？<br>
 </div>""", unsafe_allow_html=True)
 
-    if st.button("🔍 揭曉答案", key="reveal_s10"):
-        st.session_state.revealed_s10 = True
-    if st.session_state.get("revealed_s10"):
-        st.markdown("""
+    st.markdown("""
 <div class="big" style="line-height:2.0">
-　　答：<b>直方圖（Histogram）</b>——把分數切成一段一段，看每段有幾個人。
+　　答：<b>直方圖(Histogram)</b>——把分數切成一段一段,看每段有幾個人。
 </div>""", unsafe_allow_html=True)
 
     st.markdown("""
@@ -1450,9 +1447,8 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
     elif not all_picked:
         st.info("👆 三題都選好之後才能提交")
 
-    c_submit, c_reveal, c_reset = st.columns([2, 2, 1])
-    if c_submit.button("📨 提交配對", key="s10_submit",
-                       use_container_width=True, disabled=not can_submit):
+    if st.button("📨 提交配對", key="s10_submit",
+                 use_container_width=True, disabled=not can_submit):
         choice_str = "|".join(picks)
         ok, msg = gsheet.add_vote(
             _S10_QKEY, choice_str, group=group, student_id=sid, name=name,
@@ -1463,23 +1459,15 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
             st.error(msg)
         st.rerun()
 
-    if c_reveal.button("🔍 揭曉答案", key="s10_reveal",
-                       use_container_width=True):
-        st.session_state.revealed_s10_match = True
-    if c_reset.button("♻ 清除", key="s10_reset", use_container_width=True):
-        gsheet.reset_votes(_S10_QKEY)
-        st.session_state.revealed_s10_match = False
-        st.rerun()
-
     st.markdown(
         f"<div style='text-align:center;color:#666;font-size:14px;margin-top:6px'>"
-        f"{'🟢 已連結 Google Sheet · 全班即時同步' if online else '🟡 未連結 Google Sheet（fallback：本機 session）'}"
+        f"{'🟢 已連結 Google Sheet · 全班即時同步' if online else '🟡 未連結 Google Sheet(fallback:本機 session)'}"
         "</div>",
         unsafe_allow_html=True,
     )
 
-    if st.session_state.get("revealed_s10_match"):
-        rows = gsheet.get_rows(_S10_QKEY)
+    rows = gsheet.get_rows(_S10_QKEY)
+    if rows:
         total = len(rows)
         per_q_correct = [0, 0, 0]
         for r in rows:
@@ -1504,7 +1492,7 @@ def s10():  # 第二階段：圖表教學引言 + 連連看前測
 <br>
 🎯 &nbsp;這節課要學會一個強大的觀念：<br>
 　　<b>箱型圖裡的 Q₁、Q₂、Q₃</b>，其實就是統測公布的<br>
-　　<span style="color:#ffcc00;font-weight:bold;font-size:28px">頂標 / 前標 / 均標 / 後標 / 底標！</span>
+　　<span style="color:#ffcc00;font-weight:bold;font-size:28px">前標 / 均標 / 後標！</span>
 </div>""", unsafe_allow_html=True)
 
 
